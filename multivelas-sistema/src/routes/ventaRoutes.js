@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
-const { auth, checkRole } = require('../middleware/auth');
+const auth = require('../middleware/auth');
+const checkRole = require('../middleware/checkRole');
 const {
   obtenerVentas,
   obtenerVentaPorId,

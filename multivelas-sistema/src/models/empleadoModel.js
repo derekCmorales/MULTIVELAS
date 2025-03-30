@@ -2,71 +2,64 @@ const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 
 const empleadoSchema = new mongoose.Schema({
-  nombre: {
-    type: String,
-    required: [true, 'El nombre es requerido'],
-    trim: true
-  },
-  email: {
-    type: String,
-    required: [true, 'El email es requerido'],
-    unique: true,
-    trim: true,
-    lowercase: true,
-    match: [/^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/, 'Por favor ingrese un email válido']
-  },
-  password: {
-    type: String,
-    required: [true, 'La contraseña es requerida'],
-    minlength: 6,
-    select: false
-  },
-  rol: {
-    type: String,
-    required: [true, 'El rol es requerido'],
-    enum: ['admin', 'vendedor', 'inventario', 'financiero'],
-    default: 'vendedor'
-  },
-  telefono: {
-    type: String,
-    trim: true
-  },
+  // Información Personal
+  nombreCompleto: { type: String, required: true },
+  dpi: { type: String, required: true, unique: true },
+  nit: { type: String },
+  fechaNacimiento: { type: Date },
+  edad: { type: Number },
+  genero: { type: String, enum: ['masculino', 'femenino', 'otro'] },
+  estadoCivil: { type: String, enum: ['soltero', 'casado', 'divorciado', 'viudo'] },
+  nacionalidad: { type: String },
+
+  // Información de Contacto
+  email: { type: String, required: true, unique: true },
+  telefono: { type: String },
   direccion: {
     calle: String,
-    ciudad: String,
-    estado: String,
-    codigoPostal: String,
-    pais: String
+    zona: String,
+    colonia: String,
+    municipio: String,
+    departamento: String
   },
-  fechaContratacion: {
-    type: Date,
-    required: true
+  contactoEmergencia: {
+    nombre: String,
+    telefono: String,
+    relacion: String
   },
-  salario: {
-    type: Number,
-    required: true,
-    min: 0
+
+  // Información Laboral
+  numeroEmpleado: { type: String, unique: true },
+  fechaContratacion: { type: Date },
+  puesto: { type: String },
+  departamento: { type: String },
+  rol: { type: String, enum: ['admin', 'vendedor', 'financiero'], default: 'vendedor' },
+  sueldoBase: { type: Number },
+  tipoContrato: { type: String, enum: ['temporal', 'permanente', 'prueba'] },
+  horarioTrabajo: {
+    dias: [{ type: String, enum: ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'domingo'] }],
+    horaInicio: String,
+    horaFin: String
   },
-  datosBancarios: {
-    banco: String,
-    numeroCuenta: String,
-    tipoCuenta: {
-      type: String,
-      enum: ['corriente', 'ahorros', 'nómina']
-    }
-  },
-  estado: {
-    type: String,
-    enum: ['activo', 'inactivo'],
-    default: 'activo'
-  },
-  ultimoAcceso: {
-    type: Date
-  },
-  notas: {
-    type: String,
-    trim: true
-  }
+
+  // Información Legal y Administrativa
+  numeroIGSS: { type: String },
+  numeroIRTRA: { type: String },
+  documentos: [{
+    nombre: String,
+    tipo: String,
+    url: String
+  }],
+
+  // Información Adicional
+  foto: { type: String },
+  notas: { type: String },
+  fechaFinContrato: { type: Date },
+  estado: { type: String, enum: ['activo', 'inactivo'], default: 'activo' },
+
+  // Credenciales
+  password: { type: String, required: true },
+  supervisor: { type: mongoose.Schema.Types.ObjectId, ref: 'Empleado' }
 }, {
   timestamps: true
 });

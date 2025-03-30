@@ -51,6 +51,13 @@ interface Producto {
   stock: number;
 }
 
+interface Venta {
+  _id: string;
+  total: number;
+  fecha: string;
+  estado: string;
+}
+
 const categorias = [
   { value: 'ventas', label: 'Ventas' },
   { value: 'salarios', label: 'Salarios' },
@@ -63,6 +70,7 @@ const Financiero: React.FC = () => {
   const navigate = useNavigate();
   const [transacciones, setTransacciones] = useState<Transaccion[]>([]);
   const [productos, setProductos] = useState<Producto[]>([]);
+  const [ventas, setVentas] = useState<Venta[]>([]);
   const [open, setOpen] = useState(false);
   const [editingTransaccion, setEditingTransaccion] = useState<Transaccion | null>(null);
   const [formData, setFormData] = useState({
@@ -109,9 +117,24 @@ const Financiero: React.FC = () => {
     }
   };
 
+  const fetchVentas = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.get<ApiResponse<Venta[]>>('http://localhost:4000/api/ventas', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (response.data.success) {
+        setVentas(response.data.data);
+      }
+    } catch (error) {
+      console.error('Error al cargar ventas:', error);
+    }
+  };
+
   useEffect(() => {
     fetchTransacciones();
     fetchProductos();
+    fetchVentas();
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -248,6 +271,26 @@ const Financiero: React.FC = () => {
     return Number(valor) || 0;
   };
 
+  const calcularEstadisticasVentas = () => {
+    const ventasCompletadas = ventas.filter(v => v.estado === 'completada');
+    const totalVentas = ventasCompletadas.length;
+    const totalIngresos = ventasCompletadas.reduce((sum, v) => sum + v.total, 0);
+
+    return {
+      totalVentas,
+      totalIngresos
+    };
+  };
+
+  const calcularBalanceTotal = () => {
+    const ingresosTotales = calcularIngresos();
+    const egresosTotales = calcularEgresos();
+    const valorInventario = calcularValorInventario();
+    const ventasTotales = calcularEstadisticasVentas().totalIngresos;
+
+    return ingresosTotales + valorInventario + ventasTotales - egresosTotales;
+  };
+
   return (
     <Box>
       <AppBar position="static" color="default" elevation={0}>
@@ -281,52 +324,44 @@ const Financiero: React.FC = () => {
 
         <Grid container spacing={3} mb={3}>
           <Grid item xs={12} md={3}>
-            <Card>
-              <CardContent>
-                <Typography color="textSecondary" gutterBottom>
-                  Balance Total
-                </Typography>
-                <Typography variant="h4" color={calcularBalance() >= 0 ? 'success.main' : 'error.main'}>
-                  Q{Number(calcularBalance()).toFixed(2)}
-                </Typography>
-              </CardContent>
-            </Card>
+            <Paper sx={{ p: 2, textAlign: 'center' }}>
+              <Typography variant="h6">Ingresos Totales</Typography>
+              <Typography variant="h4" color="success.main">
+                Q{calcularIngresos().toLocaleString('es-GT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </Typography>
+            </Paper>
           </Grid>
           <Grid item xs={12} md={3}>
-            <Card>
-              <CardContent>
-                <Typography color="textSecondary" gutterBottom>
-                  Ingresos Totales
-                </Typography>
-                <Typography variant="h4" color="success.main">
-                  Q{Number(calcularIngresos()).toFixed(2)}
-                </Typography>
-              </CardContent>
-            </Card>
+            <Paper sx={{ p: 2, textAlign: 'center' }}>
+              <Typography variant="h6">Egresos Totales</Typography>
+              <Typography variant="h4" color="error.main">
+                Q{calcularEgresos().toLocaleString('es-GT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </Typography>
+            </Paper>
           </Grid>
           <Grid item xs={12} md={3}>
-            <Card>
-              <CardContent>
-                <Typography color="textSecondary" gutterBottom>
-                  Egresos Totales
-                </Typography>
-                <Typography variant="h4" color="error.main">
-                  Q{Number(calcularEgresos()).toFixed(2)}
-                </Typography>
-              </CardContent>
-            </Card>
+            <Paper sx={{ p: 2, textAlign: 'center' }}>
+              <Typography variant="h6">Valor de Inventario</Typography>
+              <Typography variant="h4" color="info.main">
+                Q{calcularValorInventario().toLocaleString('es-GT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </Typography>
+            </Paper>
           </Grid>
           <Grid item xs={12} md={3}>
-            <Card>
-              <CardContent>
-                <Typography color="textSecondary" gutterBottom>
-                  Valor del Inventario
-                </Typography>
-                <Typography variant="h4" color="primary.main">
-                  Q{Number(calcularValorInventario()).toFixed(2)}
-                </Typography>
-              </CardContent>
-            </Card>
+            <Paper sx={{ p: 2, textAlign: 'center' }}>
+              <Typography variant="h6">Ventas Totales</Typography>
+              <Typography variant="h4" color="primary.main">
+                Q{calcularEstadisticasVentas().totalIngresos.toLocaleString('es-GT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </Typography>
+            </Paper>
+          </Grid>
+          <Grid item xs={12}>
+            <Paper sx={{ p: 2, textAlign: 'center', bgcolor: 'primary.main', color: 'white' }}>
+              <Typography variant="h6">Balance Total</Typography>
+              <Typography variant="h4">
+                Q{calcularBalanceTotal().toLocaleString('es-GT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </Typography>
+            </Paper>
           </Grid>
         </Grid>
 
@@ -346,10 +381,10 @@ const Financiero: React.FC = () => {
               {transacciones.map((transaccion) => (
                 <TableRow key={transaccion._id}>
                   <TableCell>{new Date(transaccion.fecha).toLocaleDateString()}</TableCell>
-                  <TableCell>{transaccion.tipo}</TableCell>
+                  <TableCell>{transaccion.tipo.charAt(0).toUpperCase() + transaccion.tipo.slice(1)}</TableCell>
                   <TableCell>Q{Number(transaccion.monto).toLocaleString('es-GT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
-                  <TableCell>{transaccion.descripcion}</TableCell>
-                  <TableCell>{transaccion.categoria}</TableCell>
+                  <TableCell>{transaccion.descripcion.charAt(0).toUpperCase() + transaccion.descripcion.slice(1)}</TableCell>
+                  <TableCell>{transaccion.categoria.charAt(0).toUpperCase() + transaccion.categoria.slice(1)}</TableCell>
                   <TableCell>
                     <IconButton onClick={() => handleOpen(transaccion)} color="primary">
                       <EditIcon />

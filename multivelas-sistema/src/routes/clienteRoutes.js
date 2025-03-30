@@ -1,7 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const clienteController = require('../controllers/clienteController');
-const { auth, checkRole } = require('../middleware/auth');
+const auth = require('../middleware/auth');
+const checkRole = require('../middleware/checkRole');
 
 // Rutas públicas
 router.post('/registro', auth, checkRole(['admin']), clienteController.crearCliente);

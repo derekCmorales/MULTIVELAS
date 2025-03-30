@@ -50,7 +50,7 @@ export const authService = {
   login: (email: string, password: string) =>
     api.post<ApiResponse<{ token: string; empleado: Empleado }>>('/empleados/login', { email, password }),
   obtenerPerfil: () =>
-    api.get<ApiResponse<Empleado>>('/empleados/perfil'),
+    api.get<ApiResponse<Empleado>>('/empleados/perfil/me'),
 };
 
 // Servicios de Productos
@@ -81,10 +81,18 @@ export const ventaService = {
 export const empleadoService = {
   obtenerTodos: () => api.get<ApiResponse<Empleado[]>>('/empleados'),
   obtenerPorId: (id: string) => api.get<ApiResponse<Empleado>>(`/empleados/${id}`),
-  crear: (empleado: Omit<Empleado, '_id'>) =>
-    api.post<ApiResponse<Empleado>>('/empleados', empleado),
-  actualizar: (id: string, empleado: Partial<Empleado>) =>
-    api.put<ApiResponse<Empleado>>(`/empleados/${id}`, empleado),
+  crear: (empleado: FormData) =>
+    api.post<ApiResponse<Empleado>>('/empleados/registro', empleado, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    }),
+  actualizar: (id: string, empleado: FormData) =>
+    api.put<ApiResponse<Empleado>>(`/empleados/${id}`, empleado, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    }),
   eliminar: (id: string) => api.delete<ApiResponse<void>>(`/empleados/${id}`),
   obtenerPorRol: (rol: string) => api.get<ApiResponse<Empleado[]>>(`/empleados/rol/${rol}`),
   actualizarDatosBancarios: (id: string, datosBancarios: Empleado['datosBancarios']) =>

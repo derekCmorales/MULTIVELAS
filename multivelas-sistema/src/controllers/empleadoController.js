@@ -1,14 +1,23 @@
 const Empleado = require('../models/empleadoModel');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const path = require('path');
+const fs = require('fs');
 
 // Obtener todos los empleados
 exports.obtenerEmpleados = async (req, res) => {
   try {
     const empleados = await Empleado.find().select('-password');
-    res.json(empleados);
+    res.json({
+      success: true,
+      data: empleados
+    });
   } catch (error) {
-    res.status(500).json({ mensaje: 'Error al obtener empleados', error: error.message });
+    res.status(500).json({ 
+      success: false,
+      message: 'Error al obtener empleados', 
+      error: error.message 
+    });
   }
 };
 
@@ -17,53 +26,198 @@ exports.obtenerEmpleadoPorId = async (req, res) => {
   try {
     const empleado = await Empleado.findById(req.params.id).select('-password');
     if (!empleado) {
-      return res.status(404).json({ mensaje: 'Empleado no encontrado' });
+      return res.status(404).json({ 
+        success: false,
+        message: 'Empleado no encontrado' 
+      });
     }
-    res.json(empleado);
+    res.json({
+      success: true,
+      data: empleado
+    });
   } catch (error) {
-    res.status(500).json({ mensaje: 'Error al obtener empleado', error: error.message });
+    res.status(500).json({ 
+      success: false,
+      message: 'Error al obtener empleado', 
+      error: error.message 
+    });
   }
 };
 
 // Crear nuevo empleado
 exports.crearEmpleado = async (req, res) => {
   try {
-    const empleado = new Empleado(req.body);
+    const empleadoData = { ...req.body };
+
+    // Procesar campos JSON
+    if (empleadoData.contactoEmergencia) {
+      empleadoData.contactoEmergencia = JSON.parse(empleadoData.contactoEmergencia);
+    }
+    if (empleadoData.direccion) {
+      empleadoData.direccion = JSON.parse(empleadoData.direccion);
+    }
+    if (empleadoData.horarioTrabajo) {
+      empleadoData.horarioTrabajo = JSON.parse(empleadoData.horarioTrabajo);
+    }
+    if (empleadoData.documentos) {
+      empleadoData.documentos = JSON.parse(empleadoData.documentos);
+    }
+
+    // Procesar fechas
+    if (empleadoData.fechaNacimiento) {
+      empleadoData.fechaNacimiento = new Date(empleadoData.fechaNacimiento);
+    }
+    if (empleadoData.fechaContratacion) {
+      empleadoData.fechaContratacion = new Date(empleadoData.fechaContratacion);
+    }
+    if (empleadoData.fechaFinContrato) {
+      empleadoData.fechaFinContrato = new Date(empleadoData.fechaFinContrato);
+    }
+
+    // Manejar el campo supervisor
+    if (!empleadoData.supervisor || empleadoData.supervisor === '') {
+      delete empleadoData.supervisor;
+    }
+
+    // Verificar si el empleado ya existe
+    const empleadoExistente = await Empleado.findOne({
+      $or: [
+        { email: empleadoData.email },
+        { dpi: empleadoData.dpi },
+        { numeroEmpleado: empleadoData.numeroEmpleado }
+      ]
+    });
+
+    if (empleadoExistente) {
+      return res.status(400).json({ 
+        success: false,
+        message: 'Ya existe un empleado con ese email, DPI o número de empleado' 
+      });
+    }
+
+    // Procesar la foto si existe
+    if (req.file) {
+      empleadoData.foto = req.file.filename;
+    }
+
+    // Crear nuevo empleado
+    const empleado = new Empleado(empleadoData);
     await empleado.save();
-    res.status(201).json({ mensaje: 'Empleado creado exitosamente', empleado });
+
+    res.status(201).json({
+      success: true,
+      message: 'Empleado creado exitosamente',
+      data: empleado
+    });
   } catch (error) {
-    res.status(400).json({ mensaje: 'Error al crear empleado', error: error.message });
+    console.error('Error al crear empleado:', error);
+    res.status(400).json({ 
+      success: false,
+      message: 'Error al crear empleado', 
+      error: error.message 
+    });
   }
 };
 
 // Actualizar empleado
 exports.actualizarEmpleado = async (req, res) => {
   try {
+    const empleadoData = { ...req.body };
+
+    // Procesar campos JSON
+    if (empleadoData.contactoEmergencia) {
+      empleadoData.contactoEmergencia = JSON.parse(empleadoData.contactoEmergencia);
+    }
+    if (empleadoData.direccion) {
+      empleadoData.direccion = JSON.parse(empleadoData.direccion);
+    }
+    if (empleadoData.horarioTrabajo) {
+      empleadoData.horarioTrabajo = JSON.parse(empleadoData.horarioTrabajo);
+    }
+    if (empleadoData.documentos) {
+      empleadoData.documentos = JSON.parse(empleadoData.documentos);
+    }
+    if (empleadoData.datosBancarios) {
+      empleadoData.datosBancarios = JSON.parse(empleadoData.datosBancarios);
+    }
+
+    // Procesar fechas
+    if (empleadoData.fechaNacimiento) {
+      empleadoData.fechaNacimiento = new Date(empleadoData.fechaNacimiento);
+    }
+    if (empleadoData.fechaContratacion) {
+      empleadoData.fechaContratacion = new Date(empleadoData.fechaContratacion);
+    }
+    if (empleadoData.fechaFinContrato) {
+      empleadoData.fechaFinContrato = new Date(empleadoData.fechaFinContrato);
+    }
+
+    // Manejar el campo supervisor
+    if (!empleadoData.supervisor || empleadoData.supervisor === '') {
+      delete empleadoData.supervisor;
+    }
+
+    // Procesar la foto si existe
+    if (req.file) {
+      empleadoData.foto = req.file.filename;
+    }
+
     const empleado = await Empleado.findByIdAndUpdate(
       req.params.id,
-      req.body,
+      empleadoData,
       { new: true, runValidators: true }
     ).select('-password');
 
     if (!empleado) {
-      return res.status(404).json({ mensaje: 'Empleado no encontrado' });
+      return res.status(404).json({ 
+        success: false,
+        message: 'Empleado no encontrado' 
+      });
     }
-    res.json({ mensaje: 'Empleado actualizado exitosamente', empleado });
+
+    res.json({ 
+      success: true,
+      message: 'Empleado actualizado exitosamente', 
+      data: empleado 
+    });
   } catch (error) {
-    res.status(400).json({ mensaje: 'Error al actualizar empleado', error: error.message });
+    res.status(400).json({ 
+      success: false,
+      message: 'Error al actualizar empleado', 
+      error: error.message 
+    });
   }
 };
 
 // Eliminar empleado
 exports.eliminarEmpleado = async (req, res) => {
   try {
-    const empleado = await Empleado.findByIdAndDelete(req.params.id);
+    const empleado = await Empleado.findById(req.params.id);
     if (!empleado) {
-      return res.status(404).json({ mensaje: 'Empleado no encontrado' });
+      return res.status(404).json({ 
+        success: false,
+        message: 'Empleado no encontrado' 
+      });
     }
-    res.json({ mensaje: 'Empleado eliminado exitosamente' });
+
+    // Eliminar la foto si existe
+    if (empleado.foto) {
+      const fotoPath = path.join(__dirname, '..', '..', 'uploads', empleado.foto);
+      fs.unlinkSync(fotoPath);
+    }
+
+    await empleado.remove();
+
+    res.json({ 
+      success: true,
+      message: 'Empleado eliminado exitosamente' 
+    });
   } catch (error) {
-    res.status(500).json({ mensaje: 'Error al eliminar empleado', error: error.message });
+    res.status(500).json({ 
+      success: false,
+      message: 'Error al eliminar empleado', 
+      error: error.message 
+    });
   }
 };
 
@@ -72,50 +226,65 @@ exports.login = async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    // Verificar si existe el empleado
-    const empleado = await Empleado.findOne({ email }).select('+password');
+    // Validar que se proporcionaron email y password
+    if (!email || !password) {
+      return res.status(400).json({
+        success: false,
+        message: 'Por favor proporcione email y contraseña'
+      });
+    }
+
+    // Buscar empleado por email y seleccionar explícitamente el campo password
+    const empleado = await Empleado.findOne({ email });
     if (!empleado) {
-      return res.status(401).json({ mensaje: 'Credenciales inválidas' });
+      return res.status(401).json({
+        success: false,
+        message: 'Credenciales inválidas'
+      });
     }
 
     // Verificar contraseña
-    const esPasswordValido = await bcrypt.compare(password, empleado.password);
+    const esPasswordValido = await empleado.compararPassword(password);
     if (!esPasswordValido) {
-      return res.status(401).json({ mensaje: 'Credenciales inválidas' });
+      return res.status(401).json({
+        success: false,
+        message: 'Credenciales inválidas'
+      });
     }
 
     // Verificar si el empleado está activo
     if (empleado.estado !== 'activo') {
-      return res.status(401).json({ mensaje: 'Cuenta inactiva' });
+      return res.status(401).json({
+        success: false,
+        message: 'La cuenta está inactiva'
+      });
     }
 
-    // Actualizar último acceso
-    empleado.ultimoAcceso = new Date();
-    await empleado.save();
-
-    // Generar token
+    // Generar token JWT
     const token = jwt.sign(
       { id: empleado._id },
       process.env.JWT_SECRET,
       { expiresIn: '24h' }
     );
 
-    // Enviar respuesta
+    // Enviar respuesta sin la contraseña
+    const empleadoSinPassword = empleado.toObject();
+    delete empleadoSinPassword.password;
+
     res.json({
       success: true,
       data: {
         token,
-        empleado: {
-          id: empleado._id,
-          nombre: empleado.nombre,
-          email: empleado.email,
-          rol: empleado.rol
-        }
+        empleado: empleadoSinPassword
       }
     });
   } catch (error) {
     console.error('Error en login:', error);
-    res.status(500).json({ mensaje: 'Error en el servidor', error: error.message });
+    res.status(500).json({
+      success: false,
+      message: 'Error en el servidor',
+      error: error.message
+    });
   }
 };
 
@@ -126,22 +295,35 @@ exports.cambiarPassword = async (req, res) => {
     const empleado = await Empleado.findById(req.params.id).select('+password');
 
     if (!empleado) {
-      return res.status(404).json({ mensaje: 'Empleado no encontrado' });
+      return res.status(404).json({ 
+        success: false,
+        message: 'Empleado no encontrado' 
+      });
     }
 
     // Verificar contraseña actual
     const esPasswordValido = await empleado.compararPassword(passwordActual);
     if (!esPasswordValido) {
-      return res.status(401).json({ mensaje: 'Contraseña actual incorrecta' });
+      return res.status(401).json({ 
+        success: false,
+        message: 'Contraseña actual incorrecta' 
+      });
     }
 
     // Actualizar contraseña
     empleado.password = nuevaPassword;
     await empleado.save();
 
-    res.json({ mensaje: 'Contraseña actualizada exitosamente' });
+    res.json({ 
+      success: true,
+      message: 'Contraseña actualizada exitosamente' 
+    });
   } catch (error) {
-    res.status(500).json({ mensaje: 'Error al cambiar contraseña', error: error.message });
+    res.status(500).json({ 
+      success: false,
+      message: 'Error al cambiar contraseña', 
+      error: error.message 
+    });
   }
 };
 
@@ -149,70 +331,39 @@ exports.cambiarPassword = async (req, res) => {
 exports.obtenerEmpleadosPorRol = async (req, res) => {
   try {
     const empleados = await Empleado.find({ rol: req.params.rol }).select('-password');
-    res.json(empleados);
+    res.json({
+      success: true,
+      data: empleados
+    });
   } catch (error) {
-    res.status(500).json({ mensaje: 'Error al obtener empleados', error: error.message });
+    res.status(500).json({ 
+      success: false,
+      message: 'Error al obtener empleados por rol', 
+      error: error.message 
+    });
   }
 };
 
-exports.registro = async (req, res) => {
-  try {
-    const { nombre, email, password, rol } = req.body;
-
-    // Verificar si el empleado ya existe
-    const empleadoExistente = await Empleado.findOne({ email });
-    if (empleadoExistente) {
-      return res.status(400).json({ mensaje: 'El empleado ya existe' });
-    }
-
-    // Crear nuevo empleado con campos requeridos
-    const empleado = new Empleado({
-      nombre,
-      email,
-      password, // La contraseña se encriptará automáticamente en el middleware del modelo
-      rol: rol || 'empleado',
-      salario: 5000, // Valor por defecto
-      fechaContratacion: new Date() // Fecha actual
-    });
-
-    await empleado.save();
-
-    // Generar token
-    const token = jwt.sign(
-      { id: empleado._id, rol: empleado.rol },
-      process.env.JWT_SECRET,
-      { expiresIn: '24h' }
-    );
-
-    res.status(201).json({
-      mensaje: 'Empleado registrado exitosamente',
-      token,
-      empleado: {
-        id: empleado._id,
-        nombre: empleado.nombre,
-        email: empleado.email,
-        rol: empleado.rol
-      }
-    });
-  } catch (error) {
-    console.error('Error en registro:', error);
-    res.status(500).json({ mensaje: 'Error al registrar empleado', error: error.message });
-  }
-};
-
-// Obtener perfil del empleado
+// Obtener perfil del empleado autenticado
 exports.obtenerPerfil = async (req, res) => {
   try {
     const empleado = await Empleado.findById(req.user._id).select('-password');
     if (!empleado) {
-      return res.status(404).json({ mensaje: 'Empleado no encontrado' });
+      return res.status(404).json({
+        success: false,
+        message: 'Empleado no encontrado'
+      });
     }
     res.json({
       success: true,
       data: empleado
     });
   } catch (error) {
-    res.status(500).json({ mensaje: 'Error al obtener perfil', error: error.message });
+    res.status(500).json({
+      success: false,
+      message: 'Error al obtener perfil',
+      error: error.message
+    });
   }
 };
 
@@ -226,20 +377,41 @@ exports.actualizarDatosBancarios = async (req, res) => {
     ).select('-password');
 
     if (!empleado) {
-      return res.status(404).json({ mensaje: 'Empleado no encontrado' });
+      return res.status(404).json({ 
+        success: false,
+        message: 'Empleado no encontrado' 
+      });
     }
-    res.json({ mensaje: 'Datos bancarios actualizados exitosamente', empleado });
+    res.json({ 
+      success: true,
+      message: 'Datos bancarios actualizados exitosamente', 
+      data: empleado 
+    });
   } catch (error) {
-    res.status(400).json({ mensaje: 'Error al actualizar datos bancarios', error: error.message });
+    res.status(400).json({ 
+      success: false,
+      message: 'Error al actualizar datos bancarios', 
+      error: error.message 
+    });
   }
 };
 
 // Obtener nómina
 exports.obtenerNomina = async (req, res) => {
   try {
-    const empleados = await Empleado.find().select('nombre email rol salario datosBancarios');
-    res.json(empleados);
+    const empleados = await Empleado.find({ estado: 'activo' })
+      .select('nombreCompleto sueldoBase datosBancarios')
+      .sort('nombreCompleto');
+
+    res.json({
+      success: true,
+      data: empleados
+    });
   } catch (error) {
-    res.status(500).json({ mensaje: 'Error al obtener nómina', error: error.message });
+    res.status(500).json({ 
+      success: false,
+      message: 'Error al obtener nómina', 
+      error: error.message 
+    });
   }
 }; 

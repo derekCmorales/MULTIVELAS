@@ -11,7 +11,10 @@ const auth = async (req, res, next) => {
     }
 
     if (!token) {
-      return res.status(401).json({ mensaje: 'No autorizado - Token no proporcionado' });
+      return res.status(401).json({ 
+        success: false,
+        message: 'No autorizado - Token no proporcionado' 
+      });
     }
 
     try {
@@ -21,22 +24,35 @@ const auth = async (req, res, next) => {
       // Obtener empleado del token
       const empleado = await Empleado.findById(decoded.id).select('-password');
       if (!empleado) {
-        return res.status(401).json({ mensaje: 'No autorizado - Empleado no encontrado' });
+        return res.status(401).json({ 
+          success: false,
+          message: 'No autorizado - Empleado no encontrado' 
+        });
       }
 
       // Verificar si el empleado está activo
       if (empleado.estado !== 'activo') {
-        return res.status(401).json({ mensaje: 'No autorizado - Cuenta inactiva' });
+        return res.status(401).json({ 
+          success: false,
+          message: 'No autorizado - Cuenta inactiva' 
+        });
       }
 
       // Agregar empleado a la request
       req.user = empleado;
       next();
     } catch (error) {
-      return res.status(401).json({ mensaje: 'No autorizado - Token inválido' });
+      return res.status(401).json({ 
+        success: false,
+        message: 'No autorizado - Token inválido' 
+      });
     }
   } catch (error) {
-    res.status(500).json({ mensaje: 'Error en la autenticación', error: error.message });
+    res.status(500).json({ 
+      success: false,
+      message: 'Error en la autenticación', 
+      error: error.message 
+    });
   }
 };
 
@@ -58,4 +74,4 @@ const checkRole = (roles) => {
   };
 };
 
-module.exports = { auth, checkRole }; 
+module.exports = auth; 

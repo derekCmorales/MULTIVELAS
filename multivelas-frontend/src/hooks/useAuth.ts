@@ -1,10 +1,16 @@
 import { useState, useEffect } from 'react';
 import { authService } from '../services/api';
 import { ApiResponse } from '../types/api';
+import { Empleado } from '../types/models';
+
+interface LoginResponse {
+  token: string;
+  empleado: Empleado;
+}
 
 interface AuthContextType {
   isAuthenticated: boolean;
-  user: any | null;
+  user: Empleado | null;
   login: (email: string, password: string) => Promise<boolean>;
   logout: () => void;
   isLoading: boolean;
@@ -12,7 +18,7 @@ interface AuthContextType {
 
 export const useAuth = (): AuthContextType => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [user, setUser] = useState<any | null>(null);
+  const [user, setUser] = useState<Empleado | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -43,6 +49,8 @@ export const useAuth = (): AuthContextType => {
   const login = async (email: string, password: string): Promise<boolean> => {
     try {
       const response = await authService.login(email, password);
+      console.log('Respuesta del login:', response.data); // Para depuración
+
       if (response.data.success) {
         const { token, empleado } = response.data.data;
         localStorage.setItem('token', token);
@@ -52,9 +60,9 @@ export const useAuth = (): AuthContextType => {
       } else {
         throw new Error(response.data.message || 'Error de autenticación');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error en login:', error);
-      throw new Error('Credenciales inválidas');
+      throw error.response?.data?.message || 'Error al iniciar sesión';
     }
   };
 

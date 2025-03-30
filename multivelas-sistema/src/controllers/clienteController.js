@@ -1,12 +1,28 @@
 const Cliente = require('../models/clienteModel');
+const Venta = require('../models/ventaModel');
 
 // Obtener todos los clientes
 exports.obtenerClientes = async (req, res) => {
   try {
     const clientes = await Cliente.find();
+    
+    // Obtener las ventas para cada cliente
+    const clientesConVentas = await Promise.all(
+      clientes.map(async (cliente) => {
+        const ventas = await Venta.find({ cliente: cliente._id })
+          .select('fecha total estado')
+          .sort({ fecha: -1 });
+        
+        return {
+          ...cliente.toObject(),
+          ventas
+        };
+      })
+    );
+
     res.json({
       success: true,
-      data: clientes
+      data: clientesConVentas
     });
   } catch (error) {
     console.error('Error al obtener clientes:', error);
@@ -28,9 +44,20 @@ exports.obtenerClientePorId = async (req, res) => {
         message: 'Cliente no encontrado'
       });
     }
+
+    // Obtener las ventas del cliente
+    const ventas = await Venta.find({ cliente: cliente._id })
+      .select('fecha total estado')
+      .sort({ fecha: -1 });
+
+    const clienteConVentas = {
+      ...cliente.toObject(),
+      ventas
+    };
+
     res.json({
       success: true,
-      data: cliente
+      data: clienteConVentas
     });
   } catch (error) {
     console.error('Error al obtener cliente:', error);

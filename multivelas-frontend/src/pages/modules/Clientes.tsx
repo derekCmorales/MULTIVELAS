@@ -35,7 +35,14 @@ interface Cliente {
   email: string;
   telefono: string;
   direccion: string;
-  tipoCliente: string;
+  estado: string;
+  ventas?: Venta[];
+}
+
+interface Venta {
+  _id: string;
+  fecha: string;
+  total: number;
   estado: string;
 }
 
@@ -49,15 +56,21 @@ const Clientes: React.FC = () => {
     email: '',
     telefono: '',
     direccion: '',
-    tipoCliente: '',
     estado: 'activo'
+  });
+  const [errors, setErrors] = useState({
+    nombre: '',
+    email: '',
+    telefono: '',
+    direccion: '',
+    estado: ''
   });
 
   useEffect(() => {
-    cargarClientes();
+    fetchClientes();
   }, []);
 
-  const cargarClientes = async () => {
+  const fetchClientes = async () => {
     try {
       const token = localStorage.getItem('token');
       const response = await axios.get<ApiResponse<Cliente[]>>('http://localhost:4000/api/clientes', {
@@ -66,6 +79,7 @@ const Clientes: React.FC = () => {
       if (response.data.success) {
         setClientes(response.data.data);
       } else {
+        console.error('Error en la respuesta:', response.data.message);
         toast.error('Error al cargar clientes');
       }
     } catch (error) {
@@ -82,7 +96,6 @@ const Clientes: React.FC = () => {
         email: cliente.email,
         telefono: cliente.telefono,
         direccion: cliente.direccion,
-        tipoCliente: cliente.tipoCliente,
         estado: cliente.estado
       });
     } else {
@@ -92,7 +105,6 @@ const Clientes: React.FC = () => {
         email: '',
         telefono: '',
         direccion: '',
-        tipoCliente: '',
         estado: 'activo'
       });
     }
@@ -107,7 +119,6 @@ const Clientes: React.FC = () => {
       email: '',
       telefono: '',
       direccion: '',
-      tipoCliente: '',
       estado: 'activo'
     });
   };
@@ -130,7 +141,7 @@ const Clientes: React.FC = () => {
         if (response.data.success) {
           toast.success('Cliente actualizado correctamente');
           handleClose();
-          cargarClientes();
+          fetchClientes();
         } else {
           toast.error(response.data.message || 'Error al actualizar cliente');
         }
@@ -143,7 +154,7 @@ const Clientes: React.FC = () => {
         if (response.data.success) {
           toast.success('Cliente creado correctamente');
           handleClose();
-          cargarClientes();
+          fetchClientes();
         } else {
           toast.error(response.data.message || 'Error al crear cliente');
         }
@@ -163,7 +174,7 @@ const Clientes: React.FC = () => {
         });
         if (response.data.success) {
           toast.success('Cliente eliminado correctamente');
-          cargarClientes();
+          fetchClientes();
         } else {
           toast.error(response.data.message || 'Error al eliminar cliente');
         }
@@ -172,6 +183,22 @@ const Clientes: React.FC = () => {
         toast.error('Error al eliminar cliente');
       }
     }
+  };
+
+  const calcularEstadisticasCliente = (cliente: Cliente) => {
+    const ventasCompletadas = cliente.ventas?.filter(v => v.estado === 'completada') || [];
+    const ventasPendientes = cliente.ventas?.filter(v => v.estado === 'pendiente') || [];
+
+    return {
+      totalVentas: ventasCompletadas.length,
+      totalIngresos: ventasCompletadas.reduce((sum, v) => sum + v.total, 0),
+      totalPendientes: ventasPendientes.reduce((sum, v) => sum + v.total, 0)
+    };
+  };
+
+  const handleFieldChange = (field: string, value: string) => {
+    setFormData({ ...formData, [field]: value });
+    setErrors({ ...errors, [field]: '' });
   };
 
   return (
@@ -213,30 +240,53 @@ const Clientes: React.FC = () => {
                   <TableCell>Email</TableCell>
                   <TableCell>Teléfono</TableCell>
                   <TableCell>Dirección</TableCell>
-                  <TableCell>Tipo</TableCell>
                   <TableCell>Estado</TableCell>
+                  <TableCell>Ventas Completadas</TableCell>
+                  <TableCell>Ventas Pendientes</TableCell>
                   <TableCell>Acciones</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
-                {clientes.map((cliente) => (
-                  <TableRow key={cliente._id}>
-                    <TableCell>{cliente.nombre}</TableCell>
-                    <TableCell>{cliente.email}</TableCell>
-                    <TableCell>{cliente.telefono}</TableCell>
-                    <TableCell>{cliente.direccion}</TableCell>
-                    <TableCell>{cliente.tipoCliente}</TableCell>
-                    <TableCell>{cliente.estado}</TableCell>
-                    <TableCell>
-                      <IconButton onClick={() => handleOpen(cliente)} color="primary">
-                        <EditIcon />
-                      </IconButton>
-                      <IconButton onClick={() => handleDelete(cliente._id)} color="error">
-                        <DeleteIcon />
-                      </IconButton>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {clientes.map((cliente) => {
+                  const ventasCompletadas = cliente.ventas?.filter(v => v.estado === 'completada') || [];
+                  const ventasPendientes = cliente.ventas?.filter(v => v.estado === 'pendiente') || [];
+                  const totalCompletadas = ventasCompletadas.reduce((sum, v) => sum + v.total, 0);
+                  const totalPendientes = ventasPendientes.reduce((sum, v) => sum + v.total, 0);
+
+                  return (
+                    <TableRow key={cliente._id}>
+                      <TableCell>{cliente.nombre ? cliente.nombre.charAt(0).toUpperCase() + cliente.nombre.slice(1) : ''}</TableCell>
+                      <TableCell>{cliente.email || ''}</TableCell>
+                      <TableCell>{cliente.telefono || ''}</TableCell>
+                      <TableCell>{cliente.direccion ? cliente.direccion.charAt(0).toUpperCase() + cliente.direccion.slice(1) : ''}</TableCell>
+                      <TableCell>
+                        <Typography
+                          color={cliente.estado === 'activo' ? 'success.main' : 'error.main'}
+                        >
+                          {cliente.estado ? cliente.estado.charAt(0).toUpperCase() + cliente.estado.slice(1) : ''}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Typography color="success.main">
+                          Q{totalCompletadas.toLocaleString('es-GT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Typography color="warning.main">
+                          Q{totalPendientes.toLocaleString('es-GT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <IconButton onClick={() => handleOpen(cliente)} color="primary">
+                          <EditIcon />
+                        </IconButton>
+                        <IconButton onClick={() => handleDelete(cliente._id)} color="error">
+                          <DeleteIcon />
+                        </IconButton>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           </TableContainer>
@@ -252,46 +302,108 @@ const Clientes: React.FC = () => {
                 <TextField
                   label="Nombre"
                   value={formData.nombre}
-                  onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
+                  onChange={(e) => handleFieldChange('nombre', e.target.value)}
+                  error={!!errors.nombre}
+                  helperText={errors.nombre}
                   fullWidth
-                  required
                 />
+
                 <TextField
                   label="Email"
                   value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  onChange={(e) => handleFieldChange('email', e.target.value)}
+                  error={!!errors.email}
+                  helperText={errors.email}
                   fullWidth
-                  required
-                  type="email"
                 />
+
                 <TextField
                   label="Teléfono"
                   value={formData.telefono}
-                  onChange={(e) => setFormData({ ...formData, telefono: e.target.value })}
+                  onChange={(e) => handleFieldChange('telefono', e.target.value)}
+                  error={!!errors.telefono}
+                  helperText={errors.telefono}
                   fullWidth
-                  required
                 />
+
                 <TextField
                   label="Dirección"
                   value={formData.direccion}
-                  onChange={(e) => setFormData({ ...formData, direccion: e.target.value })}
+                  onChange={(e) => handleFieldChange('direccion', e.target.value)}
+                  error={!!errors.direccion}
+                  helperText={errors.direccion}
                   fullWidth
-                  required
-                  multiline
-                  rows={3}
                 />
-                <FormControl fullWidth required>
-                  <InputLabel>Tipo de Cliente</InputLabel>
+
+                <FormControl fullWidth required error={!!errors.estado}>
+                  <InputLabel>Estado</InputLabel>
                   <Select
-                    value={formData.tipoCliente}
-                    onChange={(e) => setFormData({ ...formData, tipoCliente: e.target.value })}
-                    label="Tipo de Cliente"
+                    value={formData.estado}
+                    label="Estado"
+                    onChange={(e) => handleFieldChange('estado', e.target.value)}
                   >
-                    <MenuItem value="minorista">Minorista</MenuItem>
-                    <MenuItem value="mayorista">Mayorista</MenuItem>
-                    <MenuItem value="distribuidor">Distribuidor</MenuItem>
+                    <MenuItem value="activo">Activo</MenuItem>
+                    <MenuItem value="inactivo">Inactivo</MenuItem>
                   </Select>
+                  {errors.estado && (
+                    <Typography color="error" variant="caption">
+                      {errors.estado}
+                    </Typography>
+                  )}
                 </FormControl>
+
+                {editingCliente && editingCliente.ventas && editingCliente.ventas.length > 0 && (
+                  <Box sx={{ mt: 3 }}>
+                    <Typography variant="h6" gutterBottom>Historial de Ventas</Typography>
+                    <TableContainer component={Paper}>
+                      <Table size="small">
+                        <TableHead>
+                          <TableRow>
+                            <TableCell>Fecha</TableCell>
+                            <TableCell>Total</TableCell>
+                            <TableCell>Estado</TableCell>
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {editingCliente.ventas
+                            .filter(v => v.estado === 'completada' || v.estado === 'pendiente')
+                            .map((venta) => (
+                              <TableRow key={venta._id}>
+                                <TableCell>{new Date(venta.fecha).toLocaleDateString()}</TableCell>
+                                <TableCell>Q{Number(venta.total).toLocaleString('es-GT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
+                                <TableCell>
+                                  <Typography
+                                    color={
+                                      venta.estado === 'completada' ? 'success.main' :
+                                        venta.estado === 'pendiente' ? 'warning.main' :
+                                          'error.main'
+                                    }
+                                  >
+                                    {venta.estado ? venta.estado.charAt(0).toUpperCase() + venta.estado.slice(1) : ''}
+                                  </Typography>
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
+
+                    <Box sx={{ mt: 2, display: 'flex', gap: 2 }}>
+                      <Paper sx={{ p: 2, flex: 1, textAlign: 'center' }}>
+                        <Typography variant="subtitle2">Ventas Completadas</Typography>
+                        <Typography variant="h6" color="success.main">
+                          Q{calcularEstadisticasCliente(editingCliente).totalIngresos.toLocaleString('es-GT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </Typography>
+                      </Paper>
+                      <Paper sx={{ p: 2, flex: 1, textAlign: 'center' }}>
+                        <Typography variant="subtitle2">Ventas Pendientes</Typography>
+                        <Typography variant="h6" color="warning.main">
+                          Q{calcularEstadisticasCliente(editingCliente).totalPendientes.toLocaleString('es-GT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </Typography>
+                      </Paper>
+                    </Box>
+                  </Box>
+                )}
               </Box>
             </DialogContent>
             <DialogActions>

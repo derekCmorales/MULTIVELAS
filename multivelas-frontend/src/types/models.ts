@@ -40,18 +40,51 @@ export interface Empleado {
   _id: string;
   nombreCompleto: string;
   dpi: string;
-  email: string;
-  telefono: string;
+  nit: string;
+  fechaNacimiento: string;
+  edad: number;
+  genero: string;
+  estadoCivil: string;
+  nacionalidad: string;
   direccion: {
     calle: string;
-    ciudad: string;
+    zona: string;
+    colonia: string;
+    municipio: string;
     departamento: string;
-    codigoPostal: string;
   };
+  email: string;
+  telefono: string;
+  contactoEmergencia: {
+    nombre: string;
+    telefono: string;
+    relacion: string;
+  };
+  numeroEmpleado: string;
+  fechaContratacion: string;
+  puesto: string;
+  departamento: string;
   rol: 'administrador' | 'vendedor' | 'inventario' | 'contador';
   sueldoBase: number;
-  fechaIngreso: Date;
+  tipoContrato: string;
+  horarioTrabajo: {
+    dias: string[];
+    horaInicio: string;
+    horaFin: string;
+  };
+  supervisor: string;
+  numeroIGSS: string;
+  numeroIRTRA: string;
+  foto: string | File;
+  documentos: {
+    nombre: string;
+    url: string;
+    tipo: string;
+  }[];
+  notas: string;
+  fechaFinContrato: string;
   estado: 'activo' | 'inactivo';
+  password: string;
   datosBancarios?: {
     banco: string;
     numeroCuenta: string;

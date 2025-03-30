@@ -8,26 +8,37 @@ const crearAdmin = async () => {
     await mongoose.connect(process.env.MONGODB_URI);
     console.log('Conectado a MongoDB');
 
-    // Verificar si ya existe un admin
-    const adminExistente = await Empleado.findOne({ email: 'admin@admin.com' });
+    // Eliminar admin existente si existe
+    const adminExistente = await Empleado.findOne({ email: 'admin@multivelas.com' });
     if (adminExistente) {
-      console.log('El administrador ya existe');
-      process.exit(0);
+      console.log('Eliminando administrador existente...');
+      await Empleado.deleteOne({ email: 'admin@multivelas.com' });
+      console.log('Administrador existente eliminado');
     }
 
-    // Crear el admin
+    // Crear empleado administrador
     const admin = new Empleado({
       nombre: 'Administrador',
-      email: 'admin@admin.com',
+      email: 'admin@multivelas.com',
       password: 'admin123',
+      dpi: '123456789',
       rol: 'admin',
-      estado: 'activo',
-      salario: 0,
-      fechaContratacion: new Date()
+      estado: 'activo'
     });
 
     await admin.save();
     console.log('Administrador creado exitosamente');
+    console.log('Email: admin@multivelas.com');
+    console.log('Password: admin123');
+
+    // Verificar que se guardó correctamente
+    const adminVerificado = await Empleado.findOne({ email: 'admin@multivelas.com' });
+    console.log('Admin verificado:', adminVerificado ? 'Sí' : 'No');
+    if (adminVerificado) {
+      const esPasswordValido = await adminVerificado.compararPassword('admin123');
+      console.log('¿Contraseña válida?:', esPasswordValido);
+    }
+
     process.exit(0);
   } catch (error) {
     console.error('Error:', error);

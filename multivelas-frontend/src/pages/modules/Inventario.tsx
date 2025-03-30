@@ -273,14 +273,12 @@ const Inventario: React.FC = () => {
             <TableBody>
               {productos.map((producto) => (
                 <TableRow key={producto._id}>
-                  <TableCell>{producto.nombre}</TableCell>
-                  <TableCell>{producto.descripcion}</TableCell>
-                  <TableCell>Q{producto.precio.toFixed(2)}</TableCell>
-                  <TableCell color={producto.stock < 10 ? 'error.main' : 'inherit'}>
-                    {producto.stock}
-                  </TableCell>
-                  <TableCell>{producto.categoria}</TableCell>
-                  <TableCell>{producto.estado}</TableCell>
+                  <TableCell>{producto.nombre.charAt(0).toUpperCase() + producto.nombre.slice(1)}</TableCell>
+                  <TableCell>{producto.descripcion.charAt(0).toUpperCase() + producto.descripcion.slice(1)}</TableCell>
+                  <TableCell>{producto.categoria.charAt(0).toUpperCase() + producto.categoria.slice(1)}</TableCell>
+                  <TableCell>{producto.stock}</TableCell>
+                  <TableCell>Q{Number(producto.precio).toLocaleString('es-GT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
+                  <TableCell>{producto.estado.charAt(0).toUpperCase() + producto.estado.slice(1)}</TableCell>
                   <TableCell>
                     <IconButton onClick={() => handleOpen(producto)} color="primary">
                       <EditIcon />

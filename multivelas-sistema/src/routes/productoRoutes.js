@@ -1,7 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const productoController = require('../controllers/productoController');
-const { auth, checkRole } = require('../middleware/auth');
+const auth = require('../middleware/auth');
+const checkRole = require('../middleware/checkRole');
 
 // Rutas que requieren autenticación
 router.get('/', auth, productoController.obtenerProductos);

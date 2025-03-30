@@ -79,7 +79,7 @@ const Ventas: React.FC = () => {
     productos: [{ producto: '', cantidad: 1, precioUnitario: 0, subtotal: 0 }],
     total: '0',
     metodoPago: 'efectivo',
-    estado: 'completada'
+    estado: 'pendiente'
   });
   const [errors, setErrors] = useState<{
     cliente?: string;
@@ -103,12 +103,15 @@ const Ventas: React.FC = () => {
   // Calcular estadísticas
   const calcularEstadisticas = () => {
     const ventasCompletadas = ventas.filter(v => v.estado === 'completada');
+    const ventasPendientes = ventas.filter(v => v.estado === 'pendiente');
     const totalVentas = ventasCompletadas.length;
     const totalIngresos = ventasCompletadas.reduce((sum, v) => sum + v.total, 0);
+    const totalPendientes = ventasPendientes.reduce((sum, v) => sum + v.total, 0);
 
     return {
       totalVentas,
-      totalIngresos
+      totalIngresos,
+      totalPendientes
     };
   };
 
@@ -178,53 +181,62 @@ const Ventas: React.FC = () => {
     setTouched(prev => ({ ...prev, [field]: true }));
   };
 
-  const handleProductoChange = (index: number, field: string, value: any) => {
-    console.log('Cambio de producto:', index, field, value);
+  const handleProductChange = (index: number, field: string, value: any) => {
     const newProductos = [...formData.productos];
-    newProductos[index] = {
-      ...newProductos[index],
-      [field]: value
-    };
+    const producto = { ...newProductos[index] };
 
-    // Si se cambia el producto, actualizar el precio unitario
     if (field === 'producto') {
-      const productoSeleccionado = productos.find(p => p._id === value);
-      if (productoSeleccionado) {
-        newProductos[index].precioUnitario = productoSeleccionado.precio;
+      const selectedProduct = productos.find(p => p._id === value);
+      if (selectedProduct) {
+        producto.producto = value;
+        producto.precioUnitario = selectedProduct.precio;
+        producto.cantidad = 1;
+        producto.subtotal = selectedProduct.precio;
       }
+    } else if (field === 'cantidad') {
+      const selectedProduct = productos.find(p => p._id === producto.producto);
+      if (selectedProduct) {
+        if (Number(value) > selectedProduct.stock) {
+          toast.error(`Solo hay ${selectedProduct.stock} unidades disponibles`);
+          return;
+        }
+        producto.cantidad = Number(value);
+        producto.subtotal = producto.precioUnitario * Number(value);
+      }
+    } else if (field === 'precioUnitario') {
+      producto.precioUnitario = Number(value);
+      producto.subtotal = producto.precioUnitario * producto.cantidad;
     }
 
-    // Calcular el subtotal para este producto
-    const cantidad = Number(newProductos[index].cantidad) || 0;
-    const precio = Number(newProductos[index].precioUnitario) || 0;
-    newProductos[index].subtotal = cantidad * precio;
-
-    // Calcular el total
-    const total = newProductos.reduce((sum, p) => sum + (Number(p.subtotal) || 0), 0);
-
-    setFormData({ 
-      ...formData, 
+    newProductos[index] = producto;
+    setFormData(prev => ({
+      ...prev,
       productos: newProductos,
-      total: total.toString()
-    });
+      total: newProductos.reduce((sum, p) => sum + p.subtotal, 0).toString()
+    }));
+  };
 
-    // Marcar el campo como tocado
-    setTouched(prev => {
-      console.log('Estado anterior de touched:', prev);
-      const newTouched = {
+  const handleAddProduct = () => {
+    setFormData(prev => ({
+      ...prev,
+      productos: [...prev.productos, { producto: '', cantidad: 1, precioUnitario: 0, subtotal: 0 }]
+    }));
+  };
+
+  const handleRemoveProduct = (index: number) => {
+    setFormData(prev => {
+      const newProductos = prev.productos.filter((_, i) => i !== index);
+      return {
         ...prev,
-        productos: prev.productos?.map((p, i) => 
-          i === index ? { ...p, [field]: true } : p
-        ) || [{ [field]: true }]
+        productos: newProductos,
+        total: newProductos.reduce((sum, p) => sum + p.subtotal, 0).toString()
       };
-      console.log('Nuevo estado de touched:', newTouched);
-      return newTouched;
     });
   };
 
   const validateForm = () => {
     const newErrors: typeof errors = {};
-    
+
     if (!formData.cliente) {
       newErrors.cliente = 'Cliente es requerido';
     }
@@ -234,28 +246,28 @@ const Ventas: React.FC = () => {
     } else {
       newErrors.productos = formData.productos.map((producto, index) => {
         const productoErrors: { producto?: string; cantidad?: string; precioUnitario?: string } = {};
-        
+
         // Validar producto
         if (!producto.producto) {
           productoErrors.producto = 'Producto es requerido';
         }
-        
+
         // Validar cantidad
         if (!producto.cantidad || producto.cantidad <= 0) {
           productoErrors.cantidad = 'Cantidad debe ser mayor a 0';
         }
-        
+
         // Validar precio unitario
         if (!producto.precioUnitario || producto.precioUnitario <= 0) {
           productoErrors.precioUnitario = 'Precio debe ser mayor a 0';
         }
-        
+
         // Validar stock disponible
         const productoSeleccionado = productos.find(p => p._id === producto.producto);
         if (productoSeleccionado && producto.cantidad > productoSeleccionado.stock) {
           productoErrors.cantidad = `Solo hay ${productoSeleccionado.stock} unidades disponibles`;
         }
-        
+
         return productoErrors;
       });
     }
@@ -273,11 +285,11 @@ const Ventas: React.FC = () => {
     e.preventDefault();
     console.log('Iniciando handleSubmit');
     console.log('Estado actual del formulario:', formData);
-    
+
     try {
       // Validar el formulario
       const newErrors: typeof errors = {};
-      
+
       if (!formData.cliente) {
         newErrors.cliente = 'Cliente es requerido';
       }
@@ -287,28 +299,28 @@ const Ventas: React.FC = () => {
       } else {
         newErrors.productos = formData.productos.map((producto, index) => {
           const productoErrors: { producto?: string; cantidad?: string; precioUnitario?: string } = {};
-          
+
           // Validar que se haya seleccionado un producto
           if (!producto.producto) {
             productoErrors.producto = 'Debe seleccionar un producto';
           }
-          
+
           // Validar cantidad
           if (!producto.cantidad || producto.cantidad <= 0) {
             productoErrors.cantidad = 'La cantidad debe ser mayor a 0';
           }
-          
+
           // Validar precio unitario
           if (!producto.precioUnitario || producto.precioUnitario <= 0) {
             productoErrors.precioUnitario = 'El precio debe ser mayor a 0';
           }
-          
+
           // Validar stock disponible
           const productoSeleccionado = productos.find(p => p._id === producto.producto);
           if (productoSeleccionado && producto.cantidad > productoSeleccionado.stock) {
             productoErrors.cantidad = `Solo hay ${productoSeleccionado.stock} unidades disponibles`;
           }
-          
+
           return productoErrors;
         });
       }
@@ -321,7 +333,7 @@ const Ventas: React.FC = () => {
       setErrors(newErrors);
 
       // Verificar si hay errores en los productos
-      const hasProductErrors = newErrors.productos?.some(p => 
+      const hasProductErrors = newErrors.productos?.some(p =>
         Object.keys(p).length > 0
       );
 
@@ -385,7 +397,7 @@ const Ventas: React.FC = () => {
       console.error('Error al guardar venta:', error.message);
       console.error('Respuesta del servidor:', error.response?.data);
       console.error('Configuración de la petición:', error.config);
-      
+
       if (error.response?.data?.message) {
         toast.error(error.response.data.message);
       } else {
@@ -416,7 +428,7 @@ const Ventas: React.FC = () => {
         productos: [{ producto: '', cantidad: 1, precioUnitario: 0, subtotal: 0 }],
         total: '0',
         metodoPago: 'efectivo',
-        estado: 'completada'
+        estado: 'pendiente'
       });
     }
     setOpen(true);
@@ -430,7 +442,7 @@ const Ventas: React.FC = () => {
       productos: [{ producto: '', cantidad: 1, precioUnitario: 0, subtotal: 0 }],
       total: '0',
       metodoPago: 'efectivo',
-      estado: 'completada'
+      estado: 'pendiente'
     });
     setErrors({});
     setTouched({});
@@ -503,17 +515,25 @@ const Ventas: React.FC = () => {
 
         {/* Estadísticas */}
         <Grid container spacing={3} sx={{ mb: 3 }}>
-          <Grid item xs={12} md={6}>
+          <Grid item xs={12} md={4}>
             <Paper sx={{ p: 2, textAlign: 'center' }}>
-              <Typography variant="h6">Total de Ventas</Typography>
+              <Typography variant="h6">Total de Ventas Completadas</Typography>
               <Typography variant="h4">{calcularEstadisticas().totalVentas}</Typography>
             </Paper>
           </Grid>
-          <Grid item xs={12} md={6}>
+          <Grid item xs={12} md={4}>
             <Paper sx={{ p: 2, textAlign: 'center' }}>
               <Typography variant="h6">Ingresos Totales</Typography>
-              <Typography variant="h4">
+              <Typography variant="h4" color="success.main">
                 Q{calcularEstadisticas().totalIngresos.toLocaleString('es-GT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </Typography>
+            </Paper>
+          </Grid>
+          <Grid item xs={12} md={4}>
+            <Paper sx={{ p: 2, textAlign: 'center' }}>
+              <Typography variant="h6">Ventas Pendientes</Typography>
+              <Typography variant="h4" color="warning.main">
+                Q{calcularEstadisticas().totalPendientes.toLocaleString('es-GT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </Typography>
             </Paper>
           </Grid>
@@ -536,11 +556,23 @@ const Ventas: React.FC = () => {
                 <TableRow key={venta._id}>
                   <TableCell>{new Date(venta.fecha).toLocaleDateString()}</TableCell>
                   <TableCell>
-                    {typeof venta.cliente === 'object' ? venta.cliente.nombre : venta.cliente}
+                    {venta.cliente ?
+                      (typeof venta.cliente === 'object' ? venta.cliente.nombre : venta.cliente)
+                      : 'Cliente no especificado'}
                   </TableCell>
                   <TableCell>Q{Number(venta.total).toLocaleString('es-GT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
-                  <TableCell>{venta.metodoPago}</TableCell>
-                  <TableCell>{venta.estado}</TableCell>
+                  <TableCell>{venta.metodoPago.charAt(0).toUpperCase() + venta.metodoPago.slice(1)}</TableCell>
+                  <TableCell>
+                    <Typography
+                      color={
+                        venta.estado === 'completada' ? 'success.main' :
+                          venta.estado === 'pendiente' ? 'warning.main' :
+                            'error.main'
+                      }
+                    >
+                      {venta.estado.charAt(0).toUpperCase() + venta.estado.slice(1)}
+                    </Typography>
+                  </TableCell>
                   <TableCell>
                     <IconButton onClick={() => handleOpen(venta)} color="primary">
                       <EditIcon />
@@ -582,78 +614,79 @@ const Ventas: React.FC = () => {
                   )}
                 </FormControl>
 
-                {formData.productos.map((producto, index) => (
-                  <Box key={index} sx={{ display: 'flex', gap: 2, alignItems: 'flex-start' }}>
-                    <FormControl fullWidth required error={!!getProductoError(index, 'producto') && getProductoTouched(index, 'producto')}>
-                      <InputLabel>Producto</InputLabel>
-                      <Select
-                        value={producto.producto}
-                        label="Producto"
-                        onChange={(e) => handleProductoChange(index, 'producto', e.target.value)}
-                      >
-                        {productos.map((p) => (
-                          <MenuItem key={p._id} value={p._id}>
-                            {p.nombre} - Stock: {p.stock}
-                          </MenuItem>
-                        ))}
-                      </Select>
-                      {getProductoError(index, 'producto') && getProductoTouched(index, 'producto') && (
-                        <Typography color="error" variant="caption">
-                          {getProductoError(index, 'producto')}
-                        </Typography>
-                      )}
-                    </FormControl>
+                <Box sx={{ mt: 2 }}>
+                  <Typography variant="h6" gutterBottom>Productos</Typography>
+                  {formData.productos.map((producto, index) => (
+                    <Box key={index} sx={{ display: 'flex', gap: 2, mb: 2 }}>
+                      <FormControl fullWidth error={!!errors.productos?.[index]?.producto}>
+                        <InputLabel>Producto</InputLabel>
+                        <Select
+                          value={producto.producto || ''}
+                          label="Producto"
+                          onChange={(e) => handleProductChange(index, 'producto', e.target.value)}
+                        >
+                          {productos.map((p) => (
+                            <MenuItem key={p._id} value={p._id}>
+                              {p.nombre} - Stock: {p.stock}
+                            </MenuItem>
+                          ))}
+                        </Select>
+                        {errors.productos?.[index]?.producto && (
+                          <Typography color="error" variant="caption">
+                            {errors.productos[index].producto}
+                          </Typography>
+                        )}
+                      </FormControl>
 
-                    <TextField
-                      label="Cantidad"
-                      type="number"
-                      value={producto.cantidad}
-                      onChange={(e) => handleProductoChange(index, 'cantidad', parseInt(e.target.value))}
-                      error={!!getProductoError(index, 'cantidad') && getProductoTouched(index, 'cantidad')}
-                      helperText={getProductoError(index, 'cantidad') && getProductoTouched(index, 'cantidad') ? getProductoError(index, 'cantidad') : ''}
-                      sx={{ width: '150px' }}
-                    />
+                      <TextField
+                        label="Cantidad"
+                        type="number"
+                        value={producto.cantidad}
+                        onChange={(e) => handleProductChange(index, 'cantidad', e.target.value)}
+                        error={!!errors.productos?.[index]?.cantidad}
+                        helperText={errors.productos?.[index]?.cantidad}
+                        sx={{ width: '120px' }}
+                      />
 
-                    <TextField
-                      label="Precio Unitario"
-                      type="number"
-                      value={producto.precioUnitario}
-                      onChange={(e) => handleProductoChange(index, 'precioUnitario', parseFloat(e.target.value))}
-                      error={!!getProductoError(index, 'precioUnitario') && getProductoTouched(index, 'precioUnitario')}
-                      helperText={getProductoError(index, 'precioUnitario') && getProductoTouched(index, 'precioUnitario') ? getProductoError(index, 'precioUnitario') : ''}
-                      InputProps={{
-                        startAdornment: 'Q'
-                      }}
-                      sx={{ width: '150px' }}
-                    />
+                      <TextField
+                        label="Precio Unitario"
+                        type="number"
+                        value={producto.precioUnitario}
+                        onChange={(e) => handleProductChange(index, 'precioUnitario', e.target.value)}
+                        error={!!errors.productos?.[index]?.precioUnitario}
+                        helperText={errors.productos?.[index]?.precioUnitario}
+                        sx={{ width: '150px' }}
+                      />
 
-                    {index > 0 && (
-                      <IconButton
-                        color="error"
-                        onClick={() => {
-                          const newProductos = formData.productos.filter((_, i) => i !== index);
-                          setFormData({ ...formData, productos: newProductos });
-                        }}
-                      >
-                        <RemoveIcon />
+                      <TextField
+                        label="Subtotal"
+                        value={producto.subtotal}
+                        InputProps={{ readOnly: true }}
+                        sx={{ width: '150px' }}
+                      />
+
+                      <IconButton onClick={() => handleRemoveProduct(index)} color="error">
+                        <DeleteIcon />
                       </IconButton>
-                    )}
-                  </Box>
-                ))}
+                    </Box>
+                  ))}
+                  <Button
+                    startIcon={<AddIcon />}
+                    onClick={handleAddProduct}
+                    sx={{ mt: 1 }}
+                  >
+                    Agregar Producto
+                  </Button>
+                </Box>
 
-                <Button
-                  startIcon={<AddIcon />}
-                  onClick={() => {
-                    setFormData({
-                      ...formData,
-                      productos: [...formData.productos, { producto: '', cantidad: 1, precioUnitario: 0, subtotal: 0 }]
-                    });
-                  }}
-                >
-                  Agregar Producto
-                </Button>
+                <TextField
+                  label="Total"
+                  value={formData.total}
+                  InputProps={{ readOnly: true }}
+                  fullWidth
+                />
 
-                <FormControl fullWidth required error={!!errors.metodoPago && touched.metodoPago}>
+                <FormControl fullWidth required error={!!errors.metodoPago}>
                   <InputLabel>Método de Pago</InputLabel>
                   <Select
                     value={formData.metodoPago}
@@ -664,11 +697,24 @@ const Ventas: React.FC = () => {
                     <MenuItem value="tarjeta">Tarjeta</MenuItem>
                     <MenuItem value="transferencia">Transferencia</MenuItem>
                   </Select>
-                  {errors.metodoPago && touched.metodoPago && (
+                  {errors.metodoPago && (
                     <Typography color="error" variant="caption">
                       {errors.metodoPago}
                     </Typography>
                   )}
+                </FormControl>
+
+                <FormControl fullWidth required>
+                  <InputLabel>Estado</InputLabel>
+                  <Select
+                    value={formData.estado}
+                    label="Estado"
+                    onChange={(e) => handleFieldChange('estado', e.target.value)}
+                  >
+                    <MenuItem value="pendiente">Pendiente</MenuItem>
+                    <MenuItem value="completada">Completada</MenuItem>
+                    <MenuItem value="cancelada">Cancelada</MenuItem>
+                  </Select>
                 </FormControl>
               </Box>
             </DialogContent>
