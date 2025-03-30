@@ -1,7 +1,8 @@
 import axios from 'axios';
 import { Producto, Venta, Empleado, Financiero } from '../types/models';
+import { ApiResponse } from '../types/api';
 
-const API_URL = 'http://localhost:5000/api';
+const API_URL = 'http://localhost:4000/api';
 
 const api = axios.create({
   baseURL: API_URL,
@@ -9,6 +10,20 @@ const api = axios.create({
     'Content-Type': 'application/json',
   },
 });
+
+// Interceptor para agregar el token a las peticiones
+api.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('token');
+    if (token && config.headers) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
 
 // Interceptor para manejar errores
 api.interceptors.response.use(
@@ -30,57 +45,63 @@ api.interceptors.response.use(
   }
 );
 
+// Servicio de Autenticación
+export const authService = {
+  login: (email: string, password: string) =>
+    api.post<ApiResponse<{ token: string; empleado: Empleado }>>('/empleados/login', { email, password }),
+  obtenerPerfil: () =>
+    api.get<ApiResponse<Empleado>>('/empleados/perfil'),
+};
+
 // Servicios de Productos
 export const productoService = {
-  obtenerTodos: () => api.get<Producto[]>('/productos'),
-  obtenerPorId: (id: string) => api.get<Producto>(`/productos/${id}`),
-  crear: (producto: Omit<Producto, '_id'>) => api.post<Producto>('/productos', producto),
-  actualizar: (id: string, producto: Partial<Producto>) => 
-    api.put<Producto>(`/productos/${id}`, producto),
-  eliminar: (id: string) => api.delete(`/productos/${id}`),
-  actualizarStock: (id: string, cantidad: number) => 
-    api.put<Producto>(`/productos/${id}/stock`, { cantidad }),
-  obtenerPorCategoria: (categoria: string) => 
-    api.get<Producto[]>(`/productos/categoria/${categoria}`),
+  obtenerTodos: () => api.get<ApiResponse<Producto[]>>('/productos'),
+  obtenerPorId: (id: string) => api.get<ApiResponse<Producto>>(`/productos/${id}`),
+  crear: (producto: Omit<Producto, '_id'>) => api.post<ApiResponse<Producto>>('/productos', producto),
+  actualizar: (id: string, producto: Partial<Producto>) =>
+    api.put<ApiResponse<Producto>>(`/productos/${id}`, producto),
+  eliminar: (id: string) => api.delete<ApiResponse<void>>(`/productos/${id}`),
+  actualizarStock: (id: string, cantidad: number) =>
+    api.put<ApiResponse<Producto>>(`/productos/${id}/stock`, { cantidad }),
+  obtenerPorCategoria: (categoria: string) =>
+    api.get<ApiResponse<Producto[]>>(`/productos/categoria/${categoria}`),
 };
 
 // Servicios de Ventas
 export const ventaService = {
-  obtenerTodas: () => api.get<Venta[]>('/ventas'),
-  obtenerPorId: (id: string) => api.get<Venta>(`/ventas/${id}`),
-  crear: (venta: Omit<Venta, '_id'>) => api.post<Venta>('/ventas', venta),
-  cancelar: (id: string) => api.put(`/ventas/${id}/cancelar`),
-  obtenerPorPeriodo: (fechaInicio: string, fechaFin: string) => 
-    api.get<Venta[]>('/ventas/fecha/periodo', { params: { fechaInicio, fechaFin } }),
+  obtenerTodas: () => api.get<ApiResponse<Venta[]>>('/ventas'),
+  obtenerPorId: (id: string) => api.get<ApiResponse<Venta>>(`/ventas/${id}`),
+  crear: (venta: Omit<Venta, '_id'>) => api.post<ApiResponse<Venta>>('/ventas', venta),
+  cancelar: (id: string) => api.put<ApiResponse<Venta>>(`/ventas/${id}/cancelar`),
+  obtenerPorPeriodo: (fechaInicio: string, fechaFin: string) =>
+    api.get<ApiResponse<Venta[]>>('/ventas/fecha/periodo', { params: { fechaInicio, fechaFin } }),
 };
 
 // Servicios de Empleados
 export const empleadoService = {
-  obtenerTodos: () => api.get<Empleado[]>('/empleados'),
-  obtenerPorId: (id: string) => api.get<Empleado>(`/empleados/${id}`),
-  crear: (empleado: Omit<Empleado, '_id'>) => 
-    api.post<Empleado>('/empleados', empleado),
-  actualizar: (id: string, empleado: Partial<Empleado>) => 
-    api.put<Empleado>(`/empleados/${id}`, empleado),
-  eliminar: (id: string) => api.delete(`/empleados/${id}`),
-  obtenerPorRol: (rol: string) => api.get<Empleado[]>(`/empleados/rol/${rol}`),
-  actualizarDatosBancarios: (id: string, datosBancarios: Empleado['datosBancarios']) => 
-    api.put(`/empleados/${id}/datos-bancarios`, datosBancarios),
-  obtenerNomina: () => api.get('/empleados/nomina'),
+  obtenerTodos: () => api.get<ApiResponse<Empleado[]>>('/empleados'),
+  obtenerPorId: (id: string) => api.get<ApiResponse<Empleado>>(`/empleados/${id}`),
+  crear: (empleado: Omit<Empleado, '_id'>) =>
+    api.post<ApiResponse<Empleado>>('/empleados', empleado),
+  actualizar: (id: string, empleado: Partial<Empleado>) =>
+    api.put<ApiResponse<Empleado>>(`/empleados/${id}`, empleado),
+  eliminar: (id: string) => api.delete<ApiResponse<void>>(`/empleados/${id}`),
+  obtenerPorRol: (rol: string) => api.get<ApiResponse<Empleado[]>>(`/empleados/rol/${rol}`),
+  actualizarDatosBancarios: (id: string, datosBancarios: Empleado['datosBancarios']) =>
+    api.put<ApiResponse<Empleado>>(`/empleados/${id}/datos-bancarios`, datosBancarios),
+  obtenerNomina: () => api.get<ApiResponse<any>>('/empleados/nomina'),
 };
 
 // Servicios Financieros
 export const financieroService = {
-  obtenerBalanceGeneral: () => api.get('/financiero/balance'),
-  registrarTransaccion: (transaccion: Omit<Financiero['transacciones'][0], 'fecha'>) => 
-    api.post('/financiero/transaccion', transaccion),
-  obtenerTransaccionesPorPeriodo: (fechaInicio: string, fechaFin: string) => 
-    api.get('/financiero/transacciones/periodo', { params: { fechaInicio, fechaFin } }),
-  obtenerResumen: () => api.get('/financiero/resumen'),
-  crearBalance: (balance: Omit<Balance, 'fecha'>) => 
-    api.post('/financiero/balance', balance),
-  obtenerBalancesPorPeriodo: (fechaInicio: string, fechaFin: string) => 
-    api.get('/financiero/balances/periodo', { params: { fechaInicio, fechaFin } }),
+  obtenerBalanceGeneral: () => api.get<ApiResponse<any>>('/financiero/balance'),
+  registrarTransaccion: (transaccion: Omit<Financiero['transacciones'][0], 'fecha'>) =>
+    api.post<ApiResponse<Financiero>>('/financiero/transaccion', transaccion),
+  obtenerTransaccionesPorPeriodo: (fechaInicio: string, fechaFin: string) =>
+    api.get<ApiResponse<Financiero[]>>('/financiero/transacciones/periodo', { params: { fechaInicio, fechaFin } }),
+  obtenerResumen: () => api.get<ApiResponse<any>>('/financiero/resumen'),
+  obtenerBalancesPorPeriodo: (fechaInicio: string, fechaFin: string) =>
+    api.get<ApiResponse<any[]>>('/financiero/balances/periodo', { params: { fechaInicio, fechaFin } }),
 };
 
 export default api; 

@@ -30,7 +30,7 @@ const auth = async (req, res, next) => {
       }
 
       // Agregar empleado a la request
-      req.empleado = empleado;
+      req.user = empleado;
       next();
     } catch (error) {
       return res.status(401).json({ mensaje: 'No autorizado - Token inválido' });
@@ -43,21 +43,17 @@ const auth = async (req, res, next) => {
 const checkRole = (roles) => {
   return (req, res, next) => {
     try {
-      if (!req.empleado) {
+      if (!req.user) {
         return res.status(401).json({ mensaje: 'No autorizado - No hay empleado autenticado' });
       }
 
-      if (!roles.includes(req.empleado.rol)) {
-        return res.status(403).json({
-          mensaje: 'Acceso denegado - No tiene los permisos necesarios',
-          rolRequerido: roles,
-          rolActual: req.empleado.rol
-        });
+      if (!roles.includes(req.user.rol)) {
+        return res.status(403).json({ mensaje: 'No autorizado - Rol no permitido' });
       }
 
       next();
     } catch (error) {
-      res.status(500).json({ mensaje: 'Error al verificar roles', error: error.message });
+      res.status(500).json({ mensaje: 'Error al verificar rol', error: error.message });
     }
   };
 };

@@ -43,13 +43,14 @@ const Clientes: React.FC = () => {
   const navigate = useNavigate();
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [open, setOpen] = useState(false);
-  const [clienteSeleccionado, setClienteSeleccionado] = useState<Cliente | null>(null);
+  const [editingCliente, setEditingCliente] = useState<Cliente | null>(null);
   const [formData, setFormData] = useState({
     nombre: '',
     email: '',
     telefono: '',
     direccion: '',
     tipoCliente: '',
+    estado: 'activo'
   });
 
   useEffect(() => {
@@ -65,31 +66,34 @@ const Clientes: React.FC = () => {
       if (response.data.success) {
         setClientes(response.data.data);
       } else {
-        console.error('Error en la respuesta:', response.data.message);
+        toast.error('Error al cargar clientes');
       }
     } catch (error) {
       console.error('Error al cargar clientes:', error);
+      toast.error('Error al cargar clientes');
     }
   };
 
   const handleOpen = (cliente?: Cliente) => {
     if (cliente) {
-      setClienteSeleccionado(cliente);
+      setEditingCliente(cliente);
       setFormData({
         nombre: cliente.nombre,
         email: cliente.email,
         telefono: cliente.telefono,
         direccion: cliente.direccion,
         tipoCliente: cliente.tipoCliente,
+        estado: cliente.estado
       });
     } else {
-      setClienteSeleccionado(null);
+      setEditingCliente(null);
       setFormData({
         nombre: '',
         email: '',
         telefono: '',
         direccion: '',
         tipoCliente: '',
+        estado: 'activo'
       });
     }
     setOpen(true);
@@ -97,27 +101,29 @@ const Clientes: React.FC = () => {
 
   const handleClose = () => {
     setOpen(false);
-    setClienteSeleccionado(null);
+    setEditingCliente(null);
+    setFormData({
+      nombre: '',
+      email: '',
+      telefono: '',
+      direccion: '',
+      tipoCliente: '',
+      estado: 'activo'
+    });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      // Validar campos requeridos
-      if (!formData.nombre || !formData.email || !formData.telefono || !formData.direccion || !formData.tipoCliente) {
-        toast.error('Todos los campos son requeridos');
-        return;
-      }
-
       const token = localStorage.getItem('token');
       const clienteData = {
         ...formData,
         estado: 'activo'
       };
 
-      if (clienteSeleccionado) {
+      if (editingCliente) {
         const response = await axios.put<ApiResponse<Cliente>>(
-          `http://localhost:4000/api/clientes/${clienteSeleccionado._id}`,
+          `http://localhost:4000/api/clientes/${editingCliente._id}`,
           clienteData,
           { headers: { Authorization: `Bearer ${token}` } }
         );
@@ -130,7 +136,7 @@ const Clientes: React.FC = () => {
         }
       } else {
         const response = await axios.post<ApiResponse<Cliente>>(
-          'http://localhost:4000/api/clientes',
+          'http://localhost:4000/api/clientes/registro',
           clienteData,
           { headers: { Authorization: `Bearer ${token}` } }
         );
@@ -152,12 +158,18 @@ const Clientes: React.FC = () => {
     if (window.confirm('¿Está seguro de eliminar este cliente?')) {
       try {
         const token = localStorage.getItem('token');
-        await axios.delete(`http://localhost:4000/api/clientes/${id}`, {
+        const response = await axios.delete<ApiResponse<void>>(`http://localhost:4000/api/clientes/${id}`, {
           headers: { Authorization: `Bearer ${token}` }
         });
-        cargarClientes();
+        if (response.data.success) {
+          toast.success('Cliente eliminado correctamente');
+          cargarClientes();
+        } else {
+          toast.error(response.data.message || 'Error al eliminar cliente');
+        }
       } catch (error) {
         console.error('Error al eliminar cliente:', error);
+        toast.error('Error al eliminar cliente');
       }
     }
   };
@@ -230,9 +242,9 @@ const Clientes: React.FC = () => {
           </TableContainer>
         </Paper>
 
-        <Dialog open={open} onClose={handleClose}>
+        <Dialog open={open} onClose={handleClose} maxWidth="md" fullWidth>
           <DialogTitle>
-            {clienteSeleccionado ? 'Editar Cliente' : 'Nuevo Cliente'}
+            {editingCliente ? 'Editar Cliente' : 'Nuevo Cliente'}
           </DialogTitle>
           <form onSubmit={handleSubmit}>
             <DialogContent>
@@ -265,13 +277,15 @@ const Clientes: React.FC = () => {
                   onChange={(e) => setFormData({ ...formData, direccion: e.target.value })}
                   fullWidth
                   required
+                  multiline
+                  rows={3}
                 />
                 <FormControl fullWidth required>
                   <InputLabel>Tipo de Cliente</InputLabel>
                   <Select
                     value={formData.tipoCliente}
-                    label="Tipo de Cliente"
                     onChange={(e) => setFormData({ ...formData, tipoCliente: e.target.value })}
+                    label="Tipo de Cliente"
                   >
                     <MenuItem value="minorista">Minorista</MenuItem>
                     <MenuItem value="mayorista">Mayorista</MenuItem>
@@ -282,8 +296,8 @@ const Clientes: React.FC = () => {
             </DialogContent>
             <DialogActions>
               <Button onClick={handleClose}>Cancelar</Button>
-              <Button type="submit" variant="contained">
-                {clienteSeleccionado ? 'Actualizar' : 'Crear'}
+              <Button type="submit" variant="contained" color="primary">
+                {editingCliente ? 'Actualizar' : 'Crear'}
               </Button>
             </DialogActions>
           </form>

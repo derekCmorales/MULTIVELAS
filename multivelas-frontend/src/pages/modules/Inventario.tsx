@@ -19,13 +19,15 @@ import {
   DialogActions,
   TextField,
   MenuItem,
-  IconButton
+  IconButton,
+  AppBar,
+  Toolbar,
 } from '@mui/material';
-import { Edit as EditIcon, Delete as DeleteIcon, Add as AddIcon } from '@mui/icons-material';
-import { useFormik } from 'formik';
-import * as yup from 'yup';
+import { Edit as EditIcon, Delete as DeleteIcon, Add as AddIcon, ArrowBack as ArrowBackIcon } from '@mui/icons-material';
+import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { toast } from 'react-toastify';
+import { ApiResponse } from '../../types/api';
 
 interface Producto {
   _id: string;
@@ -37,27 +39,31 @@ interface Producto {
   estado: string;
 }
 
-const validationSchema = yup.object({
-  nombre: yup.string().required('Nombre es requerido'),
-  descripcion: yup.string().required('Descripción es requerida'),
-  precio: yup.number().required('Precio es requerido').min(0, 'Precio debe ser mayor a 0'),
-  stock: yup.number().required('Stock es requerido').min(0, 'Stock debe ser mayor o igual a 0'),
-  categoria: yup.string().required('Categoría es requerida'),
-  estado: yup.string().required('Estado es requerido')
-});
-
 const Inventario: React.FC = () => {
+  const navigate = useNavigate();
   const [productos, setProductos] = useState<Producto[]>([]);
   const [open, setOpen] = useState(false);
   const [editingProducto, setEditingProducto] = useState<Producto | null>(null);
+  const [formData, setFormData] = useState({
+    nombre: '',
+    descripcion: '',
+    precio: '',
+    stock: '',
+    categoria: '',
+    estado: 'activo'
+  });
 
   const fetchProductos = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.get('http://localhost:4000/api/productos', {
+      const response = await axios.get<ApiResponse<Producto[]>>('http://localhost:4000/api/productos', {
         headers: { Authorization: `Bearer ${token}` }
       });
-      setProductos(response.data as Producto[]);
+      if (response.data.success) {
+        setProductos(response.data.data);
+      } else {
+        toast.error('Error al cargar productos');
+      }
     } catch (error) {
       console.error('Error al cargar productos:', error);
       toast.error('Error al cargar productos');
@@ -68,47 +74,53 @@ const Inventario: React.FC = () => {
     fetchProductos();
   }, []);
 
-  const formik = useFormik({
-    initialValues: {
-      nombre: '',
-      descripcion: '',
-      precio: '',
-      stock: '',
-      categoria: '',
-      estado: ''
-    },
-    validationSchema: validationSchema,
-    onSubmit: async (values) => {
-      try {
-        const token = localStorage.getItem('token');
-        if (editingProducto) {
-          await axios.put(
-            `http://localhost:4000/api/productos/${editingProducto._id}`,
-            values,
-            { headers: { Authorization: `Bearer ${token}` } }
-          );
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const token = localStorage.getItem('token');
+      const productoData = {
+        ...formData,
+        precio: parseFloat(formData.precio),
+        stock: parseInt(formData.stock)
+      };
+
+      if (editingProducto) {
+        const response = await axios.put<ApiResponse<Producto>>(
+          `http://localhost:4000/api/productos/${editingProducto._id}`,
+          productoData,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        if (response.data.success) {
           toast.success('Producto actualizado correctamente');
+          handleClose();
+          fetchProductos();
         } else {
-          await axios.post(
-            'http://localhost:4000/api/productos',
-            values,
-            { headers: { Authorization: `Bearer ${token}` } }
-          );
-          toast.success('Producto creado correctamente');
+          toast.error(response.data.message || 'Error al actualizar producto');
         }
-        handleClose();
-        fetchProductos();
-      } catch (error) {
-        console.error('Error al guardar producto:', error);
-        toast.error('Error al guardar producto');
+      } else {
+        const response = await axios.post<ApiResponse<Producto>>(
+          'http://localhost:4000/api/productos',
+          productoData,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        if (response.data.success) {
+          toast.success('Producto creado correctamente');
+          handleClose();
+          fetchProductos();
+        } else {
+          toast.error(response.data.message || 'Error al crear producto');
+        }
       }
+    } catch (error) {
+      console.error('Error al guardar producto:', error);
+      toast.error('Error al guardar producto');
     }
-  });
+  };
 
   const handleOpen = (producto?: Producto) => {
     if (producto) {
       setEditingProducto(producto);
-      formik.setValues({
+      setFormData({
         nombre: producto.nombre,
         descripcion: producto.descripcion,
         precio: producto.precio.toString(),
@@ -118,7 +130,14 @@ const Inventario: React.FC = () => {
       });
     } else {
       setEditingProducto(null);
-      formik.resetForm();
+      setFormData({
+        nombre: '',
+        descripcion: '',
+        precio: '',
+        stock: '',
+        categoria: '',
+        estado: 'activo'
+      });
     }
     setOpen(true);
   };
@@ -126,18 +145,29 @@ const Inventario: React.FC = () => {
   const handleClose = () => {
     setOpen(false);
     setEditingProducto(null);
-    formik.resetForm();
+    setFormData({
+      nombre: '',
+      descripcion: '',
+      precio: '',
+      stock: '',
+      categoria: '',
+      estado: 'activo'
+    });
   };
 
   const handleDelete = async (id: string) => {
     if (window.confirm('¿Está seguro de eliminar este producto?')) {
       try {
         const token = localStorage.getItem('token');
-        await axios.delete(`http://localhost:4000/api/productos/${id}`, {
+        const response = await axios.delete<ApiResponse<Producto>>(`http://localhost:4000/api/productos/${id}`, {
           headers: { Authorization: `Bearer ${token}` }
         });
-        toast.success('Producto eliminado correctamente');
-        fetchProductos();
+        if (response.data.success) {
+          toast.success('Producto eliminado correctamente');
+          fetchProductos();
+        } else {
+          toast.error(response.data.message || 'Error al eliminar producto');
+        }
       } catch (error) {
         console.error('Error al eliminar producto:', error);
         toast.error('Error al eliminar producto');
@@ -159,190 +189,205 @@ const Inventario: React.FC = () => {
 
   return (
     <Box>
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
-        <Typography variant="h4">Inventario</Typography>
-        <Button
-          variant="contained"
-          color="primary"
-          startIcon={<AddIcon />}
-          onClick={() => handleOpen()}
-        >
-          Nuevo Producto
-        </Button>
-      </Box>
+      <AppBar position="static" color="default" elevation={0}>
+        <Toolbar>
+          <IconButton
+            edge="start"
+            color="inherit"
+            onClick={() => navigate('/dashboard')}
+            sx={{ mr: 2 }}
+          >
+            <ArrowBackIcon />
+          </IconButton>
+          <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
+            MultiVelas
+          </Typography>
+        </Toolbar>
+      </AppBar>
 
-      <Grid container spacing={3} mb={3}>
-        <Grid item xs={12} md={4}>
-          <Card>
-            <CardContent>
-              <Typography color="textSecondary" gutterBottom>
-                Valor Total del Inventario
-              </Typography>
-              <Typography variant="h4" color="primary">
-                ${calcularValorTotal().toFixed(2)}
-              </Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid item xs={12} md={4}>
-          <Card>
-            <CardContent>
-              <Typography color="textSecondary" gutterBottom>
-                Stock Total
-              </Typography>
-              <Typography variant="h4" color="primary">
-                {calcularStockTotal()} unidades
-              </Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid item xs={12} md={4}>
-          <Card>
-            <CardContent>
-              <Typography color="textSecondary" gutterBottom>
-                Productos con Stock Bajo
-              </Typography>
-              <Typography variant="h4" color="error">
-                {calcularProductosBajos()} productos
-              </Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-      </Grid>
+      <Box sx={{ p: 3 }}>
+        <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
+          <Typography variant="h4">Inventario</Typography>
+          <Button
+            variant="contained"
+            color="primary"
+            startIcon={<AddIcon />}
+            onClick={() => handleOpen()}
+          >
+            Nuevo Producto
+          </Button>
+        </Box>
 
-      <TableContainer component={Paper}>
-        <Table>
-          <TableHead>
-            <TableRow>
-              <TableCell>Nombre</TableCell>
-              <TableCell>Descripción</TableCell>
-              <TableCell>Precio</TableCell>
-              <TableCell>Stock</TableCell>
-              <TableCell>Categoría</TableCell>
-              <TableCell>Estado</TableCell>
-              <TableCell>Acciones</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {productos.map((producto) => (
-              <TableRow key={producto._id}>
-                <TableCell>{producto.nombre}</TableCell>
-                <TableCell>{producto.descripcion}</TableCell>
-                <TableCell>${producto.precio.toFixed(2)}</TableCell>
-                <TableCell color={producto.stock < 10 ? 'error.main' : 'inherit'}>
-                  {producto.stock}
-                </TableCell>
-                <TableCell>{producto.categoria}</TableCell>
-                <TableCell>{producto.estado}</TableCell>
-                <TableCell>
-                  <IconButton onClick={() => handleOpen(producto)} color="primary">
-                    <EditIcon />
-                  </IconButton>
-                  <IconButton onClick={() => handleDelete(producto._id)} color="error">
-                    <DeleteIcon />
-                  </IconButton>
-                </TableCell>
+        <Grid container spacing={3} mb={3}>
+          <Grid item xs={12} md={4}>
+            <Card>
+              <CardContent>
+                <Typography color="textSecondary" gutterBottom>
+                  Valor Total del Inventario
+                </Typography>
+                <Typography variant="h4">
+                  Q{calcularValorTotal().toFixed(2)}
+                </Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+          <Grid item xs={12} md={4}>
+            <Card>
+              <CardContent>
+                <Typography color="textSecondary" gutterBottom>
+                  Stock Total
+                </Typography>
+                <Typography variant="h4">
+                  {calcularStockTotal()} unidades
+                </Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+          <Grid item xs={12} md={4}>
+            <Card>
+              <CardContent>
+                <Typography color="textSecondary" gutterBottom>
+                  Productos con Stock Bajo
+                </Typography>
+                <Typography variant="h4" color="error">
+                  {calcularProductosBajos()} productos
+                </Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+        </Grid>
+
+        <TableContainer component={Paper}>
+          <Table>
+            <TableHead>
+              <TableRow>
+                <TableCell>Nombre</TableCell>
+                <TableCell>Descripción</TableCell>
+                <TableCell>Precio</TableCell>
+                <TableCell>Stock</TableCell>
+                <TableCell>Categoría</TableCell>
+                <TableCell>Estado</TableCell>
+                <TableCell>Acciones</TableCell>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </TableContainer>
+            </TableHead>
+            <TableBody>
+              {productos.map((producto) => (
+                <TableRow key={producto._id}>
+                  <TableCell>{producto.nombre}</TableCell>
+                  <TableCell>{producto.descripcion}</TableCell>
+                  <TableCell>Q{producto.precio.toFixed(2)}</TableCell>
+                  <TableCell color={producto.stock < 10 ? 'error.main' : 'inherit'}>
+                    {producto.stock}
+                  </TableCell>
+                  <TableCell>{producto.categoria}</TableCell>
+                  <TableCell>{producto.estado}</TableCell>
+                  <TableCell>
+                    <IconButton onClick={() => handleOpen(producto)} color="primary">
+                      <EditIcon />
+                    </IconButton>
+                    <IconButton onClick={() => handleDelete(producto._id)} color="error">
+                      <DeleteIcon />
+                    </IconButton>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
 
-      <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth>
-        <DialogTitle>
-          {editingProducto ? 'Editar Producto' : 'Nuevo Producto'}
-        </DialogTitle>
-        <form onSubmit={formik.handleSubmit}>
-          <DialogContent>
-            <Grid container spacing={2}>
-              <Grid item xs={12}>
-                <TextField
-                  fullWidth
-                  name="nombre"
-                  label="Nombre"
-                  value={formik.values.nombre}
-                  onChange={formik.handleChange}
-                  error={formik.touched.nombre && Boolean(formik.errors.nombre)}
-                  helperText={formik.touched.nombre && formik.errors.nombre}
-                />
+        <Dialog
+          open={open}
+          onClose={handleClose}
+          maxWidth="md"
+          fullWidth
+        >
+          <DialogTitle>
+            {editingProducto ? 'Editar Producto' : 'Nuevo Producto'}
+          </DialogTitle>
+          <form onSubmit={handleSubmit}>
+            <DialogContent>
+              <Grid container spacing={3}>
+                <Grid item xs={12} md={6}>
+                  <TextField
+                    label="Nombre"
+                    value={formData.nombre}
+                    onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
+                    fullWidth
+                    required
+                  />
+                </Grid>
+                <Grid item xs={12} md={6}>
+                  <TextField
+                    label="Precio"
+                    type="number"
+                    value={formData.precio}
+                    onChange={(e) => setFormData({ ...formData, precio: e.target.value })}
+                    fullWidth
+                    required
+                    InputProps={{
+                      startAdornment: 'Q'
+                    }}
+                  />
+                </Grid>
+                <Grid item xs={12}>
+                  <TextField
+                    label="Descripción"
+                    value={formData.descripcion}
+                    onChange={(e) => setFormData({ ...formData, descripcion: e.target.value })}
+                    fullWidth
+                    multiline
+                    rows={3}
+                  />
+                </Grid>
+                <Grid item xs={12} md={6}>
+                  <TextField
+                    label="Stock"
+                    type="number"
+                    value={formData.stock}
+                    onChange={(e) => setFormData({ ...formData, stock: e.target.value })}
+                    fullWidth
+                    required
+                  />
+                </Grid>
+                <Grid item xs={12} md={6}>
+                  <TextField
+                    select
+                    label="Categoría"
+                    value={formData.categoria}
+                    onChange={(e) => setFormData({ ...formData, categoria: e.target.value })}
+                    fullWidth
+                    required
+                  >
+                    <MenuItem value="velas">Velas</MenuItem>
+                    <MenuItem value="aromatizantes">Aromatizantes</MenuItem>
+                    <MenuItem value="accesorios">Accesorios</MenuItem>
+                    <MenuItem value="otros">Otros</MenuItem>
+                  </TextField>
+                </Grid>
+                <Grid item xs={12} md={6}>
+                  <TextField
+                    select
+                    label="Estado"
+                    value={formData.estado}
+                    onChange={(e) => setFormData({ ...formData, estado: e.target.value })}
+                    fullWidth
+                    required
+                  >
+                    <MenuItem value="activo">Activo</MenuItem>
+                    <MenuItem value="inactivo">Inactivo</MenuItem>
+                  </TextField>
+                </Grid>
               </Grid>
-              <Grid item xs={12}>
-                <TextField
-                  fullWidth
-                  name="descripcion"
-                  label="Descripción"
-                  value={formik.values.descripcion}
-                  onChange={formik.handleChange}
-                  error={formik.touched.descripcion && Boolean(formik.errors.descripcion)}
-                  helperText={formik.touched.descripcion && formik.errors.descripcion}
-                />
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  fullWidth
-                  name="precio"
-                  label="Precio"
-                  type="number"
-                  value={formik.values.precio}
-                  onChange={formik.handleChange}
-                  error={formik.touched.precio && Boolean(formik.errors.precio)}
-                  helperText={formik.touched.precio && formik.errors.precio}
-                />
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  fullWidth
-                  name="stock"
-                  label="Stock"
-                  type="number"
-                  value={formik.values.stock}
-                  onChange={formik.handleChange}
-                  error={formik.touched.stock && Boolean(formik.errors.stock)}
-                  helperText={formik.touched.stock && formik.errors.stock}
-                />
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  fullWidth
-                  select
-                  name="categoria"
-                  label="Categoría"
-                  value={formik.values.categoria}
-                  onChange={formik.handleChange}
-                  error={formik.touched.categoria && Boolean(formik.errors.categoria)}
-                  helperText={formik.touched.categoria && formik.errors.categoria}
-                >
-                  <MenuItem value="velas">Velas</MenuItem>
-                  <MenuItem value="aromatizantes">Aromatizantes</MenuItem>
-                  <MenuItem value="accesorios">Accesorios</MenuItem>
-                  <MenuItem value="otros">Otros</MenuItem>
-                </TextField>
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  fullWidth
-                  select
-                  name="estado"
-                  label="Estado"
-                  value={formik.values.estado}
-                  onChange={formik.handleChange}
-                  error={formik.touched.estado && Boolean(formik.errors.estado)}
-                  helperText={formik.touched.estado && formik.errors.estado}
-                >
-                  <MenuItem value="activo">Activo</MenuItem>
-                  <MenuItem value="inactivo">Inactivo</MenuItem>
-                </TextField>
-              </Grid>
-            </Grid>
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={handleClose}>Cancelar</Button>
-            <Button type="submit" variant="contained" color="primary">
-              {editingProducto ? 'Actualizar' : 'Crear'}
-            </Button>
-          </DialogActions>
-        </form>
-      </Dialog>
+            </DialogContent>
+            <DialogActions sx={{ p: 3 }}>
+              <Button onClick={handleClose} variant="outlined">Cancelar</Button>
+              <Button type="submit" variant="contained" color="primary">
+                {editingProducto ? 'Actualizar' : 'Crear'}
+              </Button>
+            </DialogActions>
+          </form>
+        </Dialog>
+      </Box>
     </Box>
   );
 };

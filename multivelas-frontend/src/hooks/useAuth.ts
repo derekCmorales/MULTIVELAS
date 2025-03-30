@@ -1,20 +1,11 @@
 import { useState, useEffect } from 'react';
-import axios from 'axios';
-
-interface LoginResponse {
-  token: string;
-  empleado: {
-    id: string;
-    nombre: string;
-    email: string;
-    rol: string;
-  };
-}
+import { authService } from '../services/api';
+import { ApiResponse } from '../types/api';
 
 interface AuthContextType {
   isAuthenticated: boolean;
   user: any | null;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<boolean>;
   logout: () => void;
   isLoading: boolean;
 }
@@ -29,12 +20,15 @@ export const useAuth = (): AuthContextType => {
       const token = localStorage.getItem('token');
       if (token) {
         try {
-          const response = await axios.get('http://localhost:4000/api/empleados/perfil', {
-            headers: { Authorization: `Bearer ${token}` }
-          });
-          setUser(response.data);
-          setIsAuthenticated(true);
+          const response = await authService.obtenerPerfil();
+          if (response.data.success) {
+            setUser(response.data.data);
+            setIsAuthenticated(true);
+          } else {
+            throw new Error(response.data.message);
+          }
         } catch (error) {
+          console.error('Error al verificar autenticación:', error);
           localStorage.removeItem('token');
           setUser(null);
           setIsAuthenticated(false);
@@ -46,19 +40,21 @@ export const useAuth = (): AuthContextType => {
     checkAuth();
   }, []);
 
-  const login = async (email: string, password: string) => {
+  const login = async (email: string, password: string): Promise<boolean> => {
     try {
-      const response = await axios.post<LoginResponse>('http://localhost:4000/api/empleados/login', {
-        email,
-        password,
-      });
-
-      const { token, empleado } = response.data;
-      localStorage.setItem('token', token);
-      setUser(empleado);
-      setIsAuthenticated(true);
+      const response = await authService.login(email, password);
+      if (response.data.success) {
+        const { token, empleado } = response.data.data;
+        localStorage.setItem('token', token);
+        setUser(empleado);
+        setIsAuthenticated(true);
+        return true;
+      } else {
+        throw new Error(response.data.message || 'Error de autenticación');
+      }
     } catch (error) {
-      throw new Error('Error de autenticación');
+      console.error('Error en login:', error);
+      throw new Error('Credenciales inválidas');
     }
   };
 

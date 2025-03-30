@@ -20,31 +20,48 @@ import {
   InputLabel,
   Select,
   MenuItem,
+  AppBar,
+  Toolbar,
 } from '@mui/material';
-import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon } from '@mui/icons-material';
+import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, ArrowBack as ArrowBackIcon } from '@mui/icons-material';
+import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import { ApiResponse } from '../../types/api';
+import { toast } from 'react-toastify';
 
 interface Empleado {
-  id: string;
+  _id: string;
   nombre: string;
   email: string;
-  rol: string;
+  password?: string;
+  telefono: string;
+  direccion: string;
   salario: number;
-  fechaContratacion: string;
+  rol: string;
   estado: string;
+  fechaContratacion: string;
+}
+
+interface EmpleadoResponse {
+  mensaje: string;
+  empleado?: Empleado;
 }
 
 const Empleados: React.FC = () => {
+  const navigate = useNavigate();
   const [empleados, setEmpleados] = useState<Empleado[]>([]);
   const [open, setOpen] = useState(false);
-  const [empleadoSeleccionado, setEmpleadoSeleccionado] = useState<Empleado | null>(null);
+  const [editingEmpleado, setEditingEmpleado] = useState<Empleado | null>(null);
   const [formData, setFormData] = useState({
     nombre: '',
     email: '',
     password: '',
+    telefono: '',
+    direccion: '',
+    salario: '0',
     rol: '',
-    salario: '',
-    fechaContratacion: '',
+    estado: 'activo',
+    fechaContratacion: new Date().toISOString().split('T')[0]
   });
 
   useEffect(() => {
@@ -54,35 +71,42 @@ const Empleados: React.FC = () => {
   const cargarEmpleados = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.get('http://localhost:4000/api/empleados', {
+      const response = await axios.get<Empleado[]>('http://localhost:4000/api/empleados', {
         headers: { Authorization: `Bearer ${token}` }
       });
-      setEmpleados(response.data as Empleado[]);
+      setEmpleados(response.data);
     } catch (error) {
       console.error('Error al cargar empleados:', error);
+      toast.error('Error al cargar empleados');
     }
   };
 
   const handleOpen = (empleado?: Empleado) => {
     if (empleado) {
-      setEmpleadoSeleccionado(empleado);
+      setEditingEmpleado(empleado);
       setFormData({
         nombre: empleado.nombre,
         email: empleado.email,
         password: '',
-        rol: empleado.rol,
+        telefono: empleado.telefono,
+        direccion: empleado.direccion,
         salario: empleado.salario.toString(),
-        fechaContratacion: empleado.fechaContratacion.split('T')[0],
+        rol: empleado.rol,
+        estado: empleado.estado,
+        fechaContratacion: empleado.fechaContratacion.split('T')[0]
       });
     } else {
-      setEmpleadoSeleccionado(null);
+      setEditingEmpleado(null);
       setFormData({
         nombre: '',
         email: '',
         password: '',
+        telefono: '',
+        direccion: '',
+        salario: '0',
         rol: '',
-        salario: '',
-        fechaContratacion: '',
+        estado: 'activo',
+        fechaContratacion: new Date().toISOString().split('T')[0]
       });
     }
     setOpen(true);
@@ -90,34 +114,74 @@ const Empleados: React.FC = () => {
 
   const handleClose = () => {
     setOpen(false);
-    setEmpleadoSeleccionado(null);
+    setEditingEmpleado(null);
+    setFormData({
+      nombre: '',
+      email: '',
+      password: '',
+      telefono: '',
+      direccion: '',
+      salario: '0',
+      rol: '',
+      estado: 'activo',
+      fechaContratacion: new Date().toISOString().split('T')[0]
+    });
   };
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
     try {
+      if (!editingEmpleado && formData.password.length < 6) {
+        toast.error('La contraseña debe tener al menos 6 caracteres');
+        return;
+      }
+
       const token = localStorage.getItem('token');
       const empleadoData = {
         ...formData,
-        salario: parseFloat(formData.salario),
+        salario: Number(formData.salario),
+        estado: 'activo'
       };
 
-      if (empleadoSeleccionado) {
-        await axios.put(
-          `http://localhost:4000/api/empleados/${empleadoSeleccionado.id}`,
+      console.log('Datos a enviar:', empleadoData);
+
+      if (editingEmpleado) {
+        const response = await axios.put<EmpleadoResponse>(
+          `http://localhost:4000/api/empleados/${editingEmpleado._id}`,
           empleadoData,
           { headers: { Authorization: `Bearer ${token}` } }
         );
+        if (response.data.empleado) {
+          toast.success('Empleado actualizado correctamente');
+          handleClose();
+          cargarEmpleados();
+        } else {
+          toast.error(response.data.mensaje || 'Error al actualizar empleado');
+        }
       } else {
-        await axios.post(
+        const response = await axios.post<EmpleadoResponse>(
           'http://localhost:4000/api/empleados/registro',
           empleadoData,
           { headers: { Authorization: `Bearer ${token}` } }
         );
+        if (response.data.empleado) {
+          toast.success('Empleado creado correctamente');
+          handleClose();
+          cargarEmpleados();
+        } else {
+          toast.error(response.data.mensaje || 'Error al crear empleado');
+        }
       }
-      handleClose();
-      cargarEmpleados();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error al guardar empleado:', error);
+      console.error('Respuesta del servidor:', error.response?.data);
+      
+      // Manejar específicamente el error de email duplicado
+      if (error.response?.data?.error?.includes('duplicate key error') && error.response?.data?.error?.includes('email')) {
+        toast.error('Este email ya está registrado. Por favor, use otro email.');
+      } else {
+        toast.error(error.response?.data?.mensaje || 'Error al guardar empleado');
+      }
     }
   };
 
@@ -125,131 +189,181 @@ const Empleados: React.FC = () => {
     if (window.confirm('¿Está seguro de eliminar este empleado?')) {
       try {
         const token = localStorage.getItem('token');
-        await axios.delete(`http://localhost:4000/api/empleados/${id}`, {
+        const response = await axios.delete<EmpleadoResponse>(`http://localhost:4000/api/empleados/${id}`, {
           headers: { Authorization: `Bearer ${token}` }
         });
-        cargarEmpleados();
+        if (response.data.mensaje) {
+          toast.success('Empleado eliminado correctamente');
+          cargarEmpleados();
+        } else {
+          toast.error(response.data.mensaje || 'Error al eliminar empleado');
+        }
       } catch (error) {
         console.error('Error al eliminar empleado:', error);
+        toast.error('Error al eliminar empleado');
       }
     }
   };
 
   return (
-    <Box sx={{ p: 3 }}>
-      <Paper sx={{ p: 3 }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3 }}>
-          <Typography variant="h4">Gestión de Empleados</Typography>
-          <Button
-            variant="contained"
-            startIcon={<AddIcon />}
-            onClick={() => handleOpen()}
+    <Box>
+      <AppBar position="static" color="default" elevation={0}>
+        <Toolbar>
+          <IconButton
+            edge="start"
+            color="inherit"
+            onClick={() => navigate('/dashboard')}
+            sx={{ mr: 2 }}
           >
-            Nuevo Empleado
-          </Button>
-        </Box>
+            <ArrowBackIcon />
+          </IconButton>
+          <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
+            MultiVelas
+          </Typography>
+        </Toolbar>
+      </AppBar>
 
-        <TableContainer>
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell>Nombre</TableCell>
-                <TableCell>Email</TableCell>
-                <TableCell>Rol</TableCell>
-                <TableCell>Salario</TableCell>
-                <TableCell>Fecha Contratación</TableCell>
-                <TableCell>Estado</TableCell>
-                <TableCell>Acciones</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {empleados.map((empleado) => (
-                <TableRow key={empleado.id}>
-                  <TableCell>{empleado.nombre}</TableCell>
-                  <TableCell>{empleado.email}</TableCell>
-                  <TableCell>{empleado.rol}</TableCell>
-                  <TableCell>${empleado.salario.toFixed(2)}</TableCell>
-                  <TableCell>{new Date(empleado.fechaContratacion).toLocaleDateString()}</TableCell>
-                  <TableCell>{empleado.estado}</TableCell>
-                  <TableCell>
-                    <IconButton onClick={() => handleOpen(empleado)}>
-                      <EditIcon />
-                    </IconButton>
-                    <IconButton onClick={() => handleDelete(empleado.id)}>
-                      <DeleteIcon />
-                    </IconButton>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
-      </Paper>
-
-      <Dialog open={open} onClose={handleClose}>
-        <DialogTitle>
-          {empleadoSeleccionado ? 'Editar Empleado' : 'Nuevo Empleado'}
-        </DialogTitle>
-        <DialogContent>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 2 }}>
-            <TextField
-              label="Nombre"
-              value={formData.nombre}
-              onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
-              fullWidth
-            />
-            <TextField
-              label="Email"
-              value={formData.email}
-              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-              fullWidth
-            />
-            {!empleadoSeleccionado && (
-              <TextField
-                label="Contraseña"
-                type="password"
-                value={formData.password}
-                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                fullWidth
-              />
-            )}
-            <FormControl fullWidth>
-              <InputLabel>Rol</InputLabel>
-              <Select
-                value={formData.rol}
-                label="Rol"
-                onChange={(e) => setFormData({ ...formData, rol: e.target.value })}
-              >
-                <MenuItem value="admin">Administrador</MenuItem>
-                <MenuItem value="vendedor">Vendedor</MenuItem>
-                <MenuItem value="inventario">Inventario</MenuItem>
-                <MenuItem value="financiero">Financiero</MenuItem>
-              </Select>
-            </FormControl>
-            <TextField
-              label="Salario"
-              type="number"
-              value={formData.salario}
-              onChange={(e) => setFormData({ ...formData, salario: e.target.value })}
-              fullWidth
-            />
-            <TextField
-              label="Fecha de Contratación"
-              type="date"
-              value={formData.fechaContratacion}
-              onChange={(e) => setFormData({ ...formData, fechaContratacion: e.target.value })}
-              fullWidth
-              InputLabelProps={{ shrink: true }}
-            />
+      <Box sx={{ p: 3 }}>
+        <Paper sx={{ p: 3 }}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3 }}>
+            <Typography variant="h4">Gestión de Empleados</Typography>
+            <Button
+              variant="contained"
+              startIcon={<AddIcon />}
+              onClick={() => handleOpen()}
+            >
+              Nuevo Empleado
+            </Button>
           </Box>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleClose}>Cancelar</Button>
-          <Button onClick={handleSubmit} variant="contained">
-            {empleadoSeleccionado ? 'Actualizar' : 'Crear'}
-          </Button>
-        </DialogActions>
-      </Dialog>
+
+          <TableContainer>
+            <Table>
+              <TableHead>
+                <TableRow>
+                  <TableCell>Nombre</TableCell>
+                  <TableCell>Email</TableCell>
+                  <TableCell>Rol</TableCell>
+                  <TableCell>Salario</TableCell>
+                  <TableCell>Estado</TableCell>
+                  <TableCell>Acciones</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {empleados.map((empleado) => (
+                  <TableRow key={empleado._id}>
+                    <TableCell>{empleado.nombre}</TableCell>
+                    <TableCell>{empleado.email}</TableCell>
+                    <TableCell>{empleado.rol}</TableCell>
+                    <TableCell>Q{empleado.salario.toFixed(2)}</TableCell>
+                    <TableCell>{empleado.estado}</TableCell>
+                    <TableCell>
+                      <IconButton onClick={() => handleOpen(empleado)} color="primary">
+                        <EditIcon />
+                      </IconButton>
+                      <IconButton onClick={() => handleDelete(empleado._id)} color="error">
+                        <DeleteIcon />
+                      </IconButton>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </Paper>
+
+        <Dialog open={open} onClose={handleClose} maxWidth="md" fullWidth>
+          <DialogTitle>
+            {editingEmpleado ? 'Editar Empleado' : 'Nuevo Empleado'}
+          </DialogTitle>
+          <form onSubmit={handleSubmit}>
+            <DialogContent>
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 2 }}>
+                <TextField
+                  label="Nombre"
+                  value={formData.nombre}
+                  onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
+                  fullWidth
+                  required
+                />
+                <TextField
+                  label="Email"
+                  value={formData.email}
+                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  fullWidth
+                  required
+                  type="email"
+                />
+                {!editingEmpleado && (
+                  <TextField
+                    label="Contraseña"
+                    type="password"
+                    value={formData.password}
+                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                    fullWidth
+                    required
+                    helperText="Mínimo 6 caracteres"
+                  />
+                )}
+                <TextField
+                  label="Teléfono"
+                  value={formData.telefono}
+                  onChange={(e) => setFormData({ ...formData, telefono: e.target.value })}
+                  fullWidth
+                  required
+                />
+                <TextField
+                  label="Dirección"
+                  value={formData.direccion}
+                  onChange={(e) => setFormData({ ...formData, direccion: e.target.value })}
+                  fullWidth
+                  required
+                  multiline
+                  rows={3}
+                />
+                <FormControl fullWidth required>
+                  <InputLabel>Rol</InputLabel>
+                  <Select
+                    value={formData.rol}
+                    label="Rol"
+                    onChange={(e) => setFormData({ ...formData, rol: e.target.value })}
+                  >
+                    <MenuItem value="admin">Administrador</MenuItem>
+                    <MenuItem value="vendedor">Vendedor</MenuItem>
+                    <MenuItem value="inventario">Inventario</MenuItem>
+                    <MenuItem value="financiero">Financiero</MenuItem>
+                  </Select>
+                </FormControl>
+                <TextField
+                  label="Salario"
+                  type="number"
+                  value={formData.salario}
+                  onChange={(e) => setFormData({ ...formData, salario: e.target.value })}
+                  fullWidth
+                  required
+                  InputProps={{
+                    startAdornment: 'Q'
+                  }}
+                />
+                <TextField
+                  label="Fecha de Contratación"
+                  type="date"
+                  value={formData.fechaContratacion}
+                  onChange={(e) => setFormData({ ...formData, fechaContratacion: e.target.value })}
+                  fullWidth
+                  required
+                  InputLabelProps={{ shrink: true }}
+                />
+              </Box>
+            </DialogContent>
+            <DialogActions>
+              <Button onClick={handleClose}>Cancelar</Button>
+              <Button type="submit" variant="contained" color="primary">
+                {editingEmpleado ? 'Actualizar' : 'Crear'}
+              </Button>
+            </DialogActions>
+          </form>
+        </Dialog>
+      </Box>
     </Box>
   );
 };

@@ -28,7 +28,7 @@ const productoSchema = new mongoose.Schema({
   },
   imagen: {
     type: String,
-    required: [true, 'La imagen es requerida']
+    required: false
   },
   estado: {
     type: String,

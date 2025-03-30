@@ -10,6 +10,7 @@ import {
   Typography,
   Alert,
 } from '@mui/material';
+import { toast } from 'react-toastify';
 
 const Login: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -20,11 +21,16 @@ const Login: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError('');
     try {
-      await login(email, password);
-      navigate('/dashboard');
+      const success = await login(email, password);
+      if (success) {
+        toast.success('Inicio de sesión exitoso');
+        navigate('/dashboard');
+      }
     } catch (err) {
       setError('Credenciales inválidas');
+      toast.error('Error al iniciar sesión');
     }
   };
 

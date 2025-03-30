@@ -6,7 +6,9 @@ const {
   obtenerVentaPorId,
   crearVenta,
   cancelarVenta,
-  obtenerVentasPorPeriodo
+  obtenerVentasPorPeriodo,
+  actualizarVenta,
+  eliminarVenta
 } = require('../controllers/ventaController');
 
 // Rutas públicas
@@ -19,7 +21,9 @@ router.use(auth);
 router.get('/', checkRole(['admin', 'vendedor']), obtenerVentas);
 router.get('/:id', checkRole(['admin', 'vendedor']), obtenerVentaPorId);
 router.post('/', checkRole(['admin', 'vendedor']), crearVenta);
+router.put('/:id', checkRole(['admin', 'vendedor']), actualizarVenta);
 router.put('/:id/cancelar', checkRole(['admin', 'vendedor']), cancelarVenta);
+router.delete('/:id', checkRole(['admin', 'vendedor']), eliminarVenta);
 router.get('/fecha/periodo', checkRole(['admin', 'vendedor']), obtenerVentasPorPeriodo);
 
 module.exports = router; 

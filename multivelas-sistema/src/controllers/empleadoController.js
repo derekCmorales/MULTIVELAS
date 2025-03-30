@@ -72,14 +72,14 @@ exports.login = async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    // Verificar si el empleado existe
+    // Verificar si existe el empleado
     const empleado = await Empleado.findOne({ email }).select('+password');
     if (!empleado) {
       return res.status(401).json({ mensaje: 'Credenciales inválidas' });
     }
 
     // Verificar contraseña
-    const esPasswordValido = await empleado.compararPassword(password);
+    const esPasswordValido = await bcrypt.compare(password, empleado.password);
     if (!esPasswordValido) {
       return res.status(401).json({ mensaje: 'Credenciales inválidas' });
     }
@@ -93,21 +93,25 @@ exports.login = async (req, res) => {
     empleado.ultimoAcceso = new Date();
     await empleado.save();
 
-    // Generar token JWT
+    // Generar token
     const token = jwt.sign(
-      { id: empleado._id, rol: empleado.rol },
+      { id: empleado._id },
       process.env.JWT_SECRET,
       { expiresIn: '24h' }
     );
 
-    // Enviar respuesta sin el password
-    const empleadoSinPassword = empleado.toObject();
-    delete empleadoSinPassword.password;
-
+    // Enviar respuesta
     res.json({
-      mensaje: 'Login exitoso',
-      token,
-      empleado: empleadoSinPassword
+      success: true,
+      data: {
+        token,
+        empleado: {
+          id: empleado._id,
+          nombre: empleado.nombre,
+          email: empleado.email,
+          rol: empleado.rol
+        }
+      }
     });
   } catch (error) {
     console.error('Error en login:', error);
@@ -199,12 +203,43 @@ exports.registro = async (req, res) => {
 // Obtener perfil del empleado
 exports.obtenerPerfil = async (req, res) => {
   try {
-    const empleado = await Empleado.findById(req.empleado.id).select('-password');
+    const empleado = await Empleado.findById(req.user._id).select('-password');
     if (!empleado) {
       return res.status(404).json({ mensaje: 'Empleado no encontrado' });
     }
-    res.json(empleado);
+    res.json({
+      success: true,
+      data: empleado
+    });
   } catch (error) {
     res.status(500).json({ mensaje: 'Error al obtener perfil', error: error.message });
+  }
+};
+
+// Actualizar datos bancarios del empleado
+exports.actualizarDatosBancarios = async (req, res) => {
+  try {
+    const empleado = await Empleado.findByIdAndUpdate(
+      req.params.id,
+      { datosBancarios: req.body },
+      { new: true, runValidators: true }
+    ).select('-password');
+
+    if (!empleado) {
+      return res.status(404).json({ mensaje: 'Empleado no encontrado' });
+    }
+    res.json({ mensaje: 'Datos bancarios actualizados exitosamente', empleado });
+  } catch (error) {
+    res.status(400).json({ mensaje: 'Error al actualizar datos bancarios', error: error.message });
+  }
+};
+
+// Obtener nómina
+exports.obtenerNomina = async (req, res) => {
+  try {
+    const empleados = await Empleado.find().select('nombre email rol salario datosBancarios');
+    res.json(empleados);
+  } catch (error) {
+    res.status(500).json({ mensaje: 'Error al obtener nómina', error: error.message });
   }
 }; 

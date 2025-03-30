@@ -32,25 +32,23 @@ import axios from 'axios';
 import { toast } from 'react-toastify';
 import { ApiResponse } from '../../types/api';
 
+interface ProductoVenta {
+  producto: string;
+  cantidad: number;
+  precioUnitario: number;
+  subtotal: number;
+}
+
+interface Cliente {
+  _id: string;
+  nombre: string;
+  email: string;
+}
+
 interface Venta {
   _id: string;
-  cliente: {
-    _id: string;
-    nombre: string;
-  };
-  vendedor: {
-    _id: string;
-    nombre: string;
-  };
-  productos: Array<{
-    producto: {
-      _id: string;
-      nombre: string;
-      precio: number;
-    };
-    cantidad: number;
-    precioUnitario: number;
-  }>;
+  cliente: string | Cliente;
+  productos: ProductoVenta[];
   total: number;
   fecha: string;
   metodoPago: string;
@@ -77,9 +75,11 @@ const Ventas: React.FC = () => {
   const [productos, setProductos] = useState<any[]>([]);
   const [editingVenta, setEditingVenta] = useState<Venta | null>(null);
   const [formData, setFormData] = useState({
-    cliente: '',
-    productos: [{ producto: '', cantidad: 1, precioUnitario: 0 }],
-    metodoPago: ''
+    cliente: '' as string,
+    productos: [{ producto: '', cantidad: 1, precioUnitario: 0, subtotal: 0 }],
+    total: '0',
+    metodoPago: 'efectivo',
+    estado: 'completada'
   });
   const [errors, setErrors] = useState<{
     cliente?: string;
@@ -99,6 +99,18 @@ const Ventas: React.FC = () => {
     }>;
     metodoPago?: boolean;
   }>({});
+
+  // Calcular estadísticas
+  const calcularEstadisticas = () => {
+    const ventasCompletadas = ventas.filter(v => v.estado === 'completada');
+    const totalVentas = ventasCompletadas.length;
+    const totalIngresos = ventasCompletadas.reduce((sum, v) => sum + v.total, 0);
+
+    return {
+      totalVentas,
+      totalIngresos
+    };
+  };
 
   const fetchVentas = async () => {
     try {
@@ -160,6 +172,56 @@ const Ventas: React.FC = () => {
     fetchProductos();
   }, []);
 
+  const handleFieldChange = (field: string, value: any) => {
+    console.log('Cambio de campo:', field, value);
+    setFormData(prev => ({ ...prev, [field]: value }));
+    setTouched(prev => ({ ...prev, [field]: true }));
+  };
+
+  const handleProductoChange = (index: number, field: string, value: any) => {
+    console.log('Cambio de producto:', index, field, value);
+    const newProductos = [...formData.productos];
+    newProductos[index] = {
+      ...newProductos[index],
+      [field]: value
+    };
+
+    // Si se cambia el producto, actualizar el precio unitario
+    if (field === 'producto') {
+      const productoSeleccionado = productos.find(p => p._id === value);
+      if (productoSeleccionado) {
+        newProductos[index].precioUnitario = productoSeleccionado.precio;
+      }
+    }
+
+    // Calcular el subtotal para este producto
+    const cantidad = Number(newProductos[index].cantidad) || 0;
+    const precio = Number(newProductos[index].precioUnitario) || 0;
+    newProductos[index].subtotal = cantidad * precio;
+
+    // Calcular el total
+    const total = newProductos.reduce((sum, p) => sum + (Number(p.subtotal) || 0), 0);
+
+    setFormData({ 
+      ...formData, 
+      productos: newProductos,
+      total: total.toString()
+    });
+
+    // Marcar el campo como tocado
+    setTouched(prev => {
+      console.log('Estado anterior de touched:', prev);
+      const newTouched = {
+        ...prev,
+        productos: prev.productos?.map((p, i) => 
+          i === index ? { ...p, [field]: true } : p
+        ) || [{ [field]: true }]
+      };
+      console.log('Nuevo estado de touched:', newTouched);
+      return newTouched;
+    });
+  };
+
   const validateForm = () => {
     const newErrors: typeof errors = {};
     
@@ -170,11 +232,30 @@ const Ventas: React.FC = () => {
     if (!formData.productos || formData.productos.length === 0) {
       newErrors.productos = [{ producto: 'Debe agregar al menos un producto' }];
     } else {
-      newErrors.productos = formData.productos.map(producto => {
+      newErrors.productos = formData.productos.map((producto, index) => {
         const productoErrors: { producto?: string; cantidad?: string; precioUnitario?: string } = {};
-        if (!producto.producto) productoErrors.producto = 'Producto es requerido';
-        if (!producto.cantidad || producto.cantidad <= 0) productoErrors.cantidad = 'Cantidad debe ser mayor a 0';
-        if (!producto.precioUnitario || producto.precioUnitario <= 0) productoErrors.precioUnitario = 'Precio debe ser mayor a 0';
+        
+        // Validar producto
+        if (!producto.producto) {
+          productoErrors.producto = 'Producto es requerido';
+        }
+        
+        // Validar cantidad
+        if (!producto.cantidad || producto.cantidad <= 0) {
+          productoErrors.cantidad = 'Cantidad debe ser mayor a 0';
+        }
+        
+        // Validar precio unitario
+        if (!producto.precioUnitario || producto.precioUnitario <= 0) {
+          productoErrors.precioUnitario = 'Precio debe ser mayor a 0';
+        }
+        
+        // Validar stock disponible
+        const productoSeleccionado = productos.find(p => p._id === producto.producto);
+        if (productoSeleccionado && producto.cantidad > productoSeleccionado.stock) {
+          productoErrors.cantidad = `Solo hay ${productoSeleccionado.stock} unidades disponibles`;
+        }
+        
         return productoErrors;
       });
     }
@@ -183,31 +264,99 @@ const Ventas: React.FC = () => {
       newErrors.metodoPago = 'Método de pago es requerido';
     }
 
+    console.log('Errores de validación:', newErrors);
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    console.log('Iniciando handleSubmit');
+    console.log('Estado actual del formulario:', formData);
+    
     try {
-      if (!validateForm()) {
-        toast.error('Por favor, complete todos los campos requeridos');
+      // Validar el formulario
+      const newErrors: typeof errors = {};
+      
+      if (!formData.cliente) {
+        newErrors.cliente = 'Cliente es requerido';
+      }
+
+      if (!formData.productos || formData.productos.length === 0) {
+        newErrors.productos = [{ producto: 'Debe agregar al menos un producto' }];
+      } else {
+        newErrors.productos = formData.productos.map((producto, index) => {
+          const productoErrors: { producto?: string; cantidad?: string; precioUnitario?: string } = {};
+          
+          // Validar que se haya seleccionado un producto
+          if (!producto.producto) {
+            productoErrors.producto = 'Debe seleccionar un producto';
+          }
+          
+          // Validar cantidad
+          if (!producto.cantidad || producto.cantidad <= 0) {
+            productoErrors.cantidad = 'La cantidad debe ser mayor a 0';
+          }
+          
+          // Validar precio unitario
+          if (!producto.precioUnitario || producto.precioUnitario <= 0) {
+            productoErrors.precioUnitario = 'El precio debe ser mayor a 0';
+          }
+          
+          // Validar stock disponible
+          const productoSeleccionado = productos.find(p => p._id === producto.producto);
+          if (productoSeleccionado && producto.cantidad > productoSeleccionado.stock) {
+            productoErrors.cantidad = `Solo hay ${productoSeleccionado.stock} unidades disponibles`;
+          }
+          
+          return productoErrors;
+        });
+      }
+
+      if (!formData.metodoPago) {
+        newErrors.metodoPago = 'Método de pago es requerido';
+      }
+
+      console.log('Errores de validación:', newErrors);
+      setErrors(newErrors);
+
+      // Verificar si hay errores en los productos
+      const hasProductErrors = newErrors.productos?.some(p => 
+        Object.keys(p).length > 0
+      );
+
+      // Si hay errores, no continuar
+      if (newErrors.cliente || hasProductErrors || newErrors.metodoPago) {
+        console.log('Validación fallida');
+        console.log('Errores:', newErrors);
         return;
       }
 
       const token = localStorage.getItem('token');
+      console.log('Token:', token);
+
       const ventaData = {
         ...formData,
-        estado: 'completada',
-        vendedor: localStorage.getItem('userId')
+        total: Number(formData.total),
+        fecha: new Date().toISOString(),
+        productos: formData.productos.map(p => ({
+          producto: p.producto,
+          cantidad: Number(p.cantidad),
+          precioUnitario: Number(p.precioUnitario),
+          subtotal: Number(p.subtotal)
+        }))
       };
 
+      console.log('Datos a enviar:', ventaData);
+
       if (editingVenta) {
+        console.log('Actualizando venta existente');
         const response = await axios.put<ApiResponse<Venta>>(
           `http://localhost:4000/api/ventas/${editingVenta._id}`,
           ventaData,
           { headers: { Authorization: `Bearer ${token}` } }
         );
+        console.log('Respuesta de actualización:', response.data);
         if (response.data.success) {
           toast.success('Venta actualizada correctamente');
           handleClose();
@@ -216,11 +365,13 @@ const Ventas: React.FC = () => {
           toast.error(response.data.message || 'Error al actualizar venta');
         }
       } else {
+        console.log('Creando nueva venta');
         const response = await axios.post<ApiResponse<Venta>>(
-          'http://localhost:4000/api/ventas',
+          'http://localhost:4000/api/ventas/registro',
           ventaData,
           { headers: { Authorization: `Bearer ${token}` } }
         );
+        console.log('Respuesta de creación:', response.data);
         if (response.data.success) {
           toast.success('Venta creada correctamente');
           handleClose();
@@ -229,9 +380,17 @@ const Ventas: React.FC = () => {
           toast.error(response.data.message || 'Error al crear venta');
         }
       }
-    } catch (error) {
-      console.error('Error al guardar venta:', error);
-      toast.error('Error al guardar venta');
+    } catch (error: any) {
+      console.error('Error completo:', error);
+      console.error('Error al guardar venta:', error.message);
+      console.error('Respuesta del servidor:', error.response?.data);
+      console.error('Configuración de la petición:', error.config);
+      
+      if (error.response?.data?.message) {
+        toast.error(error.response.data.message);
+      } else {
+        toast.error('Error al guardar venta');
+      }
     }
   };
 
@@ -239,20 +398,25 @@ const Ventas: React.FC = () => {
     if (venta) {
       setEditingVenta(venta);
       setFormData({
-        cliente: venta.cliente._id,
+        cliente: typeof venta.cliente === 'string' ? venta.cliente : venta.cliente._id,
         productos: venta.productos.map(p => ({
-          producto: p.producto._id,
+          producto: p.producto,
           cantidad: p.cantidad,
-          precioUnitario: p.precioUnitario
+          precioUnitario: p.precioUnitario,
+          subtotal: p.subtotal
         })),
-        metodoPago: venta.metodoPago
+        total: venta.total.toString(),
+        metodoPago: venta.metodoPago,
+        estado: venta.estado
       });
     } else {
       setEditingVenta(null);
       setFormData({
         cliente: '',
-        productos: [{ producto: '', cantidad: 1, precioUnitario: 0 }],
-        metodoPago: ''
+        productos: [{ producto: '', cantidad: 1, precioUnitario: 0, subtotal: 0 }],
+        total: '0',
+        metodoPago: 'efectivo',
+        estado: 'completada'
       });
     }
     setOpen(true);
@@ -263,42 +427,39 @@ const Ventas: React.FC = () => {
     setEditingVenta(null);
     setFormData({
       cliente: '',
-      productos: [{ producto: '', cantidad: 1, precioUnitario: 0 }],
-      metodoPago: ''
+      productos: [{ producto: '', cantidad: 1, precioUnitario: 0, subtotal: 0 }],
+      total: '0',
+      metodoPago: 'efectivo',
+      estado: 'completada'
     });
+    setErrors({});
+    setTouched({});
   };
 
   const handleDelete = async (id: string) => {
     if (window.confirm('¿Está seguro de eliminar esta venta?')) {
       try {
         const token = localStorage.getItem('token');
-        await axios.delete(`http://localhost:4000/api/ventas/${id}`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        toast.success('Venta eliminada correctamente');
-        fetchVentas();
-      } catch (error) {
+        const response = await axios.delete<ApiResponse<Venta>>(
+          `http://localhost:4000/api/ventas/${id}`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        if (response.data.success) {
+          toast.success('Venta eliminada correctamente');
+          fetchVentas();
+        } else {
+          toast.error(response.data.message || 'Error al eliminar venta');
+        }
+      } catch (error: any) {
         console.error('Error al eliminar venta:', error);
-        toast.error('Error al eliminar venta');
+        console.error('Respuesta del servidor:', error.response?.data);
+        if (error.response?.data?.message) {
+          toast.error(error.response.data.message);
+        } else {
+          toast.error('Error al eliminar venta');
+        }
       }
     }
-  };
-
-  const handleFieldChange = (field: string, value: any) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
-    setTouched(prev => ({ ...prev, [field]: true }));
-  };
-
-  const handleProductoChange = (index: number, field: string, value: any) => {
-    const newProductos = [...formData.productos];
-    newProductos[index] = { ...newProductos[index], [field]: value };
-    setFormData(prev => ({ ...prev, productos: newProductos }));
-    setTouched(prev => ({
-      ...prev,
-      productos: prev.productos?.map((p, i) => 
-        i === index ? { ...p, [field]: true } : p
-      )
-    }));
   };
 
   const getProductoError = (index: number, field: 'producto' | 'cantidad' | 'precioUnitario') => {
@@ -340,16 +501,33 @@ const Ventas: React.FC = () => {
           </Button>
         </Box>
 
+        {/* Estadísticas */}
+        <Grid container spacing={3} sx={{ mb: 3 }}>
+          <Grid item xs={12} md={6}>
+            <Paper sx={{ p: 2, textAlign: 'center' }}>
+              <Typography variant="h6">Total de Ventas</Typography>
+              <Typography variant="h4">{calcularEstadisticas().totalVentas}</Typography>
+            </Paper>
+          </Grid>
+          <Grid item xs={12} md={6}>
+            <Paper sx={{ p: 2, textAlign: 'center' }}>
+              <Typography variant="h6">Ingresos Totales</Typography>
+              <Typography variant="h4">
+                Q{calcularEstadisticas().totalIngresos.toLocaleString('es-GT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </Typography>
+            </Paper>
+          </Grid>
+        </Grid>
+
         <TableContainer component={Paper}>
           <Table>
             <TableHead>
               <TableRow>
                 <TableCell>Fecha</TableCell>
                 <TableCell>Cliente</TableCell>
-                <TableCell>Vendedor</TableCell>
                 <TableCell>Total</TableCell>
-                <TableCell>Estado</TableCell>
                 <TableCell>Método de Pago</TableCell>
+                <TableCell>Estado</TableCell>
                 <TableCell>Acciones</TableCell>
               </TableRow>
             </TableHead>
@@ -357,11 +535,12 @@ const Ventas: React.FC = () => {
               {ventas.map((venta) => (
                 <TableRow key={venta._id}>
                   <TableCell>{new Date(venta.fecha).toLocaleDateString()}</TableCell>
-                  <TableCell>{venta.cliente.nombre}</TableCell>
-                  <TableCell>{venta.vendedor.nombre}</TableCell>
-                  <TableCell>Q{venta.total.toFixed(2)}</TableCell>
-                  <TableCell>{venta.estado}</TableCell>
+                  <TableCell>
+                    {typeof venta.cliente === 'object' ? venta.cliente.nombre : venta.cliente}
+                  </TableCell>
+                  <TableCell>Q{Number(venta.total).toLocaleString('es-GT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
                   <TableCell>{venta.metodoPago}</TableCell>
+                  <TableCell>{venta.estado}</TableCell>
                   <TableCell>
                     <IconButton onClick={() => handleOpen(venta)} color="primary">
                       <EditIcon />
@@ -386,7 +565,7 @@ const Ventas: React.FC = () => {
                 <FormControl fullWidth required error={!!errors.cliente && touched.cliente}>
                   <InputLabel>Cliente</InputLabel>
                   <Select
-                    value={formData.cliente}
+                    value={formData.cliente || ''}
                     label="Cliente"
                     onChange={(e) => handleFieldChange('cliente', e.target.value)}
                   >
@@ -397,79 +576,78 @@ const Ventas: React.FC = () => {
                     ))}
                   </Select>
                   {errors.cliente && touched.cliente && (
-                    <Typography color="error" variant="caption">{errors.cliente}</Typography>
+                    <Typography color="error" variant="caption">
+                      {errors.cliente}
+                    </Typography>
                   )}
                 </FormControl>
 
-                <Typography variant="h6" sx={{ mt: 2 }}>Productos</Typography>
                 {formData.productos.map((producto, index) => (
-                  <Grid container spacing={2} key={index}>
-                    <Grid item xs={12} sm={4}>
-                      <FormControl fullWidth required error={!!getProductoError(index, 'producto') && getProductoTouched(index, 'producto')}>
-                        <InputLabel>Producto</InputLabel>
-                        <Select
-                          value={producto.producto}
-                          label="Producto"
-                          onChange={(e) => handleProductoChange(index, 'producto', e.target.value)}
-                        >
-                          {productos.map((p) => (
-                            <MenuItem key={p._id} value={p._id}>
-                              {p.nombre} - Q{p.precio}
-                            </MenuItem>
-                          ))}
-                        </Select>
-                        {getProductoError(index, 'producto') && getProductoTouched(index, 'producto') && (
-                          <Typography color="error" variant="caption">{getProductoError(index, 'producto')}</Typography>
-                        )}
-                      </FormControl>
-                    </Grid>
-                    <Grid item xs={12} sm={3}>
-                      <TextField
-                        label="Cantidad"
-                        type="number"
-                        value={producto.cantidad}
-                        onChange={(e) => handleProductoChange(index, 'cantidad', Number(e.target.value))}
-                        fullWidth
-                        required
-                        error={!!getProductoError(index, 'cantidad') && getProductoTouched(index, 'cantidad')}
-                        helperText={getProductoError(index, 'cantidad') && getProductoTouched(index, 'cantidad') ? getProductoError(index, 'cantidad') : ''}
-                      />
-                    </Grid>
-                    <Grid item xs={12} sm={3}>
-                      <TextField
-                        label="Precio Unitario"
-                        type="number"
-                        value={producto.precioUnitario}
-                        onChange={(e) => handleProductoChange(index, 'precioUnitario', Number(e.target.value))}
-                        fullWidth
-                        required
-                        error={!!getProductoError(index, 'precioUnitario') && getProductoTouched(index, 'precioUnitario')}
-                        helperText={getProductoError(index, 'precioUnitario') && getProductoTouched(index, 'precioUnitario') ? getProductoError(index, 'precioUnitario') : ''}
-                        InputProps={{
-                          startAdornment: 'Q'
-                        }}
-                      />
-                    </Grid>
-                    <Grid item xs={12} sm={2}>
+                  <Box key={index} sx={{ display: 'flex', gap: 2, alignItems: 'flex-start' }}>
+                    <FormControl fullWidth required error={!!getProductoError(index, 'producto') && getProductoTouched(index, 'producto')}>
+                      <InputLabel>Producto</InputLabel>
+                      <Select
+                        value={producto.producto}
+                        label="Producto"
+                        onChange={(e) => handleProductoChange(index, 'producto', e.target.value)}
+                      >
+                        {productos.map((p) => (
+                          <MenuItem key={p._id} value={p._id}>
+                            {p.nombre} - Stock: {p.stock}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                      {getProductoError(index, 'producto') && getProductoTouched(index, 'producto') && (
+                        <Typography color="error" variant="caption">
+                          {getProductoError(index, 'producto')}
+                        </Typography>
+                      )}
+                    </FormControl>
+
+                    <TextField
+                      label="Cantidad"
+                      type="number"
+                      value={producto.cantidad}
+                      onChange={(e) => handleProductoChange(index, 'cantidad', parseInt(e.target.value))}
+                      error={!!getProductoError(index, 'cantidad') && getProductoTouched(index, 'cantidad')}
+                      helperText={getProductoError(index, 'cantidad') && getProductoTouched(index, 'cantidad') ? getProductoError(index, 'cantidad') : ''}
+                      sx={{ width: '150px' }}
+                    />
+
+                    <TextField
+                      label="Precio Unitario"
+                      type="number"
+                      value={producto.precioUnitario}
+                      onChange={(e) => handleProductoChange(index, 'precioUnitario', parseFloat(e.target.value))}
+                      error={!!getProductoError(index, 'precioUnitario') && getProductoTouched(index, 'precioUnitario')}
+                      helperText={getProductoError(index, 'precioUnitario') && getProductoTouched(index, 'precioUnitario') ? getProductoError(index, 'precioUnitario') : ''}
+                      InputProps={{
+                        startAdornment: 'Q'
+                      }}
+                      sx={{ width: '150px' }}
+                    />
+
+                    {index > 0 && (
                       <IconButton
+                        color="error"
                         onClick={() => {
                           const newProductos = formData.productos.filter((_, i) => i !== index);
-                          setFormData(prev => ({ ...prev, productos: newProductos }));
+                          setFormData({ ...formData, productos: newProductos });
                         }}
-                        disabled={formData.productos.length === 1}
                       >
                         <RemoveIcon />
                       </IconButton>
-                    </Grid>
-                  </Grid>
+                    )}
+                  </Box>
                 ))}
+
                 <Button
                   startIcon={<AddIcon />}
                   onClick={() => {
-                    setFormData(prev => ({
-                      ...prev,
-                      productos: [...prev.productos, { producto: '', cantidad: 1, precioUnitario: 0 }]
-                    }));
+                    setFormData({
+                      ...formData,
+                      productos: [...formData.productos, { producto: '', cantidad: 1, precioUnitario: 0, subtotal: 0 }]
+                    });
                   }}
                 >
                   Agregar Producto
@@ -487,7 +665,9 @@ const Ventas: React.FC = () => {
                     <MenuItem value="transferencia">Transferencia</MenuItem>
                   </Select>
                   {errors.metodoPago && touched.metodoPago && (
-                    <Typography color="error" variant="caption">{errors.metodoPago}</Typography>
+                    <Typography color="error" variant="caption">
+                      {errors.metodoPago}
+                    </Typography>
                   )}
                 </FormControl>
               </Box>

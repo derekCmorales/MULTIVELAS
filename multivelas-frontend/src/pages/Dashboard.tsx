@@ -16,7 +16,6 @@ import {
   Inventory as InventarioIcon,
   AccountBalance as FinancieroIcon,
   People as ClientesIcon,
-  Category as ProductosIcon,
   Person as EmpleadosIcon,
 } from '@mui/icons-material';
 
@@ -51,13 +50,6 @@ const Dashboard: React.FC = () => {
       icon: <ClientesIcon sx={{ fontSize: 40 }} />,
       path: '/clientes',
       color: '#9c27b0',
-    },
-    {
-      title: 'Productos',
-      description: 'Catálogo y gestión de productos',
-      icon: <ProductosIcon sx={{ fontSize: 40 }} />,
-      path: '/productos',
-      color: '#f44336',
     },
     {
       title: 'Empleados',
