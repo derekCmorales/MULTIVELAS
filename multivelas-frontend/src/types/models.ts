@@ -1,13 +1,14 @@
 export interface Producto {
   _id: string;
   nombre: string;
-  identificador: string;
   descripcion: string;
+  precio: number;
   stock: number;
-  precioUnidad: number;
   categoria: string;
-  fechaCreacion: Date;
-  ultimaActualizacion: Date;
+  imagen: string;
+  estado: 'activo' | 'inactivo';
+  fechaCreacion: string;
+  fechaActualizacion: string;
 }
 
 export interface DetalleVenta {
@@ -18,22 +19,29 @@ export interface DetalleVenta {
 }
 
 export interface Cliente {
+  _id: string;
   nombre: string;
   email: string;
   telefono: string;
+  direccion: string;
+  tipo: 'minorista' | 'mayorista';
+  estado: 'activo' | 'inactivo';
+  fechaCreacion: string;
 }
 
 export interface Venta {
   _id: string;
-  numeroFactura: string;
-  fecha: Date;
+  fechaVenta: string;
   cliente: Cliente;
-  detalles: DetalleVenta[];
-  subtotal: number;
-  iva: number;
+  productos: Array<{
+    producto: Producto;
+    cantidad: number;
+    precio: number;
+  }>;
   total: number;
-  vendedor: string | Empleado;
+  metodoPago: string;
   estado: 'pendiente' | 'completada' | 'cancelada';
+  vendedor: Empleado;
 }
 
 export interface Empleado {
@@ -64,7 +72,7 @@ export interface Empleado {
   fechaContratacion: string;
   puesto: string;
   departamento: string;
-  rol: 'administrador' | 'vendedor' | 'inventario' | 'contador';
+  rol: 'admin' | 'vendedor' | 'financiero';
   sueldoBase: number;
   tipoContrato: string;
   horarioTrabajo: {
@@ -75,17 +83,17 @@ export interface Empleado {
   supervisor: string;
   numeroIGSS: string;
   numeroIRTRA: string;
-  foto: string | File;
-  documentos: {
+  foto: string;
+  documentos: Array<{
     nombre: string;
-    url: string;
     tipo: string;
-  }[];
+    url: string;
+  }>;
   notas: string;
   fechaFinContrato: string;
   estado: 'activo' | 'inactivo';
   password: string;
-  datosBancarios?: {
+  datosBancarios: {
     banco: string;
     numeroCuenta: string;
     tipoCuenta: string;
@@ -125,7 +133,51 @@ export interface Balance {
 
 export interface Financiero {
   _id: string;
-  transacciones: Transaccion[];
-  balances: Balance[];
-  ultimoBalance: Date;
+  fechaTransaccion: string;
+  tipo: 'ingreso' | 'egreso';
+  concepto: string;
+  monto: number;
+  categoria: string;
+  metodoPago: string;
+  estado: 'pendiente' | 'completado' | 'cancelado';
+  notas: string;
+}
+
+export interface Usuario {
+  _id: string;
+  email: string;
+  nombre: string;
+  rol: 'admin' | 'vendedor' | 'financiero';
+  estado: 'activo' | 'inactivo';
+  fechaCreacion: string;
+}
+
+export interface ApiResponse<T> {
+  success: boolean;
+  message: string;
+  data: T;
+}
+
+export interface UIState {
+  sidebarOpen: boolean;
+  theme: 'light' | 'dark';
+  snackbar: {
+    open: boolean;
+    message: string;
+    severity: 'success' | 'error' | 'warning' | 'info';
+  };
+  loading: boolean;
+  dialog: {
+    open: boolean;
+    type: string | null;
+    data: any | null;
+  };
+}
+
+export interface AuthState {
+  isAuthenticated: boolean;
+  user: Usuario | null;
+  token: string | null;
+  loading: boolean;
+  error: string | null;
 } 

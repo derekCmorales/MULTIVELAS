@@ -159,9 +159,10 @@ const Empleados: React.FC = () => {
         toast.error('La imagen no debe superar los 5MB');
         return;
       }
+      const imageUrl = URL.createObjectURL(file);
       setFormData(prev => ({
         ...prev,
-        foto: file
+        foto: imageUrl
       }));
     }
   };

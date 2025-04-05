@@ -8,7 +8,9 @@ import Financiero from './pages/modules/Financiero';
 import Clientes from './pages/modules/Clientes';
 import Productos from './pages/modules/Productos';
 import Empleados from './pages/modules/Empleados';
-import { CircularProgress, Box } from '@mui/material';
+import { CircularProgress, Box, ThemeProvider, CssBaseline } from '@mui/material';
+import { darkTheme } from './theme';
+import Layout from './components/Layout';
 
 // Componente para proteger rutas que requieren autenticación
 const PrivateRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -37,68 +39,85 @@ function App() {
   }
 
   return (
-    <Router>
-      <Routes>
-        <Route path="/login" element={<Login />} />
-        <Route
-          path="/dashboard"
-          element={
-            <PrivateRoute>
-              <Dashboard />
-            </PrivateRoute>
-          }
-        />
-        <Route
-          path="/ventas"
-          element={
-            <PrivateRoute>
-              <Ventas />
-            </PrivateRoute>
-          }
-        />
-        <Route
-          path="/inventario"
-          element={
-            <PrivateRoute>
-              <Inventario />
-            </PrivateRoute>
-          }
-        />
-        <Route
-          path="/financiero"
-          element={
-            <PrivateRoute>
-              <Financiero />
-            </PrivateRoute>
-          }
-        />
-        <Route
-          path="/clientes"
-          element={
-            <PrivateRoute>
-              <Clientes />
-            </PrivateRoute>
-          }
-        />
-        <Route
-          path="/productos"
-          element={
-            <PrivateRoute>
-              <Productos />
-            </PrivateRoute>
-          }
-        />
-        <Route
-          path="/empleados"
-          element={
-            <PrivateRoute>
-              <Empleados />
-            </PrivateRoute>
-          }
-        />
-        <Route path="/" element={<Navigate to="/dashboard" replace />} />
-      </Routes>
-    </Router>
+    <ThemeProvider theme={darkTheme}>
+      <CssBaseline />
+      <Router>
+        <Routes>
+          <Route path="/login" element={<Login />} />
+          <Route
+            path="/dashboard"
+            element={
+              <PrivateRoute>
+                <Layout>
+                  <Dashboard />
+                </Layout>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/ventas"
+            element={
+              <PrivateRoute>
+                <Layout>
+                  <Ventas />
+                </Layout>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/inventario"
+            element={
+              <PrivateRoute>
+                <Layout>
+                  <Inventario />
+                </Layout>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/financiero"
+            element={
+              <PrivateRoute>
+                <Layout>
+                  <Financiero />
+                </Layout>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/clientes"
+            element={
+              <PrivateRoute>
+                <Layout>
+                  <Clientes />
+                </Layout>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/productos"
+            element={
+              <PrivateRoute>
+                <Layout>
+                  <Productos />
+                </Layout>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/empleados"
+            element={
+              <PrivateRoute>
+                <Layout>
+                  <Empleados />
+                </Layout>
+              </PrivateRoute>
+            }
+          />
+          <Route path="/" element={<Navigate to="/dashboard" replace />} />
+        </Routes>
+      </Router>
+    </ThemeProvider>
   );
 }
 
